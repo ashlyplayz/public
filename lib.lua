@@ -1,8 +1,6 @@
 --[[
-	PL UI Library — Rivals-style sidebar + cards
-	Host as lib.lua and load with:
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/ashlyplayz/public/main/lib.lua"))()
-	Local fallback: PLUILib.lua in executor workspace.
+	MythiOs UI Library — exact hub shell from Rivals Assist patterns:
+	boot loader, black modal dim, custom cursor, open-scale pop, hint chip, toasts.
 ]]
 
 local Players = game:GetService("Players")
@@ -368,6 +366,191 @@ local function makeSection(host, title)
 		return self:Label(text)
 	end
 
+	function api:TextBox(opts)
+		opts = opts or {}
+		local row = mk("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 52),
+			LayoutOrder = nextOrder(),
+		}, card)
+		trackSearch(opts.Text or opts.Placeholder, row)
+		mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 16),
+			Font = Enum.Font.GothamMedium,
+			Text = tostring(opts.Text or "Value"),
+			TextColor3 = Theme.text,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, row)
+		local box = mk("TextBox", {
+			BackgroundColor3 = Theme.panelAlt,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(0, 20),
+			Size = UDim2.new(1, 0, 0, 28),
+			Font = Enum.Font.Gotham,
+			Text = tostring(opts.Default or ""),
+			PlaceholderText = tostring(opts.Placeholder or ""),
+			PlaceholderColor3 = Theme.textDim,
+			TextColor3 = Theme.text,
+			TextSize = 12,
+			ClearTextOnFocus = false,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, row)
+		corner(box, 8)
+		pad(box, 0, 0, 10, 10)
+		stroke(box, Theme.stroke, 1, 0.35)
+		local ctrl = {}
+		function ctrl:Get()
+			return box.Text
+		end
+		function ctrl:Set(text)
+			box.Text = tostring(text or "")
+		end
+		box.FocusLost:Connect(function(enter)
+			if opts.Callback then
+				opts.Callback(box.Text, enter)
+			end
+		end)
+		return ctrl
+	end
+
+	function api:Dropdown(opts)
+		opts = opts or {}
+		local options = {}
+		for _, v in ipairs(opts.Options or {}) do
+			table.insert(options, tostring(v))
+		end
+		if #options == 0 then
+			options = { "None" }
+		end
+		local value = tostring(opts.Default or options[1])
+		if not table.find(options, value) then
+			value = options[1]
+		end
+
+		local row = mk("Frame", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 52),
+			LayoutOrder = nextOrder(),
+			ZIndex = 20,
+		}, card)
+		trackSearch(opts.Text, row)
+		mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 16),
+			Font = Enum.Font.GothamMedium,
+			Text = tostring(opts.Text or "Select"),
+			TextColor3 = Theme.text,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		}, row)
+
+		local btn = mk("TextButton", {
+			AutoButtonColor = false,
+			BackgroundColor3 = Theme.panelAlt,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(0, 20),
+			Size = UDim2.new(1, 0, 0, 28),
+			Font = Enum.Font.GothamBold,
+			Text = "  " .. value .. "   ▾",
+			TextColor3 = Theme.text,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 21,
+		}, row)
+		corner(btn, 8)
+		stroke(btn, Theme.stroke, 1, 0.35)
+
+		local open = false
+		local menu = mk("ScrollingFrame", {
+			BackgroundColor3 = Theme.bg,
+			BorderSizePixel = 0,
+			Position = UDim2.fromOffset(0, 50),
+			Size = UDim2.new(1, 0, 0, math.min(28 * #options, 140)),
+			Visible = false,
+			ZIndex = 60,
+			ScrollBarThickness = 3,
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		}, row)
+		corner(menu, 8)
+		stroke(menu, Theme.accentDim, 1, 0.3)
+		pad(menu, 4, 4, 4, 4)
+		mk("UIListLayout", {
+			Padding = UDim.new(0, 3),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}, menu)
+
+		local ctrl = {}
+		local function setValue(v, silent)
+			value = tostring(v)
+			btn.Text = "  " .. value .. "   ▾"
+			if not silent and opts.Callback then
+				opts.Callback(value)
+			end
+		end
+		function ctrl:Get()
+			return value
+		end
+		function ctrl:Set(v, silent)
+			if table.find(options, tostring(v)) then
+				setValue(v, silent)
+			end
+		end
+		function ctrl:SetOptions(list, keep)
+			table.clear(options)
+			for _, child in ipairs(menu:GetChildren()) do
+				if child:IsA("TextButton") then
+					child:Destroy()
+				end
+			end
+			for _, v in ipairs(list or {}) do
+				table.insert(options, tostring(v))
+			end
+			if #options == 0 then
+				options = { "None" }
+			end
+			menu.Size = UDim2.new(1, 0, 0, math.min(28 * #options, 140))
+			for i, opt in ipairs(options) do
+				local item = mk("TextButton", {
+					AutoButtonColor = false,
+					BackgroundColor3 = Theme.panelAlt,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 24),
+					Font = Enum.Font.Gotham,
+					Text = opt,
+					TextColor3 = Theme.text,
+					TextSize = 11,
+					LayoutOrder = i,
+					ZIndex = 61,
+				}, menu)
+				corner(item, 6)
+				item.MouseButton1Click:Connect(function()
+					setValue(opt, false)
+					open = false
+					menu.Visible = false
+					row.Size = UDim2.new(1, 0, 0, 52)
+				end)
+			end
+			if keep and table.find(options, value) then
+				setValue(value, true)
+			else
+				setValue(options[1], true)
+			end
+		end
+
+		ctrl:SetOptions(options, true)
+
+		btn.MouseButton1Click:Connect(function()
+			open = not open
+			menu.Visible = open
+			row.Size = UDim2.new(1, 0, 0, open and (56 + menu.Size.Y.Offset) or 52)
+		end)
+
+		return ctrl
+	end
+
 	return api
 end
 
@@ -451,7 +634,10 @@ function Library.CreateWindow(opts)
 			ZIndex = 251,
 			Active = false,
 		}, menuCursor)
-		stroke(f, Color3.fromRGB(0, 0, 0), 1, 0)
+		local s = Instance.new("UIStroke")
+		s.Thickness = 1
+		s.Color = Color3.fromRGB(0, 0, 0)
+		s.Parent = f
 	end
 	cursorBar(UDim2.fromOffset(2, 22), UDim2.fromOffset(10, 0))
 	cursorBar(UDim2.fromOffset(22, 2), UDim2.fromOffset(0, 10))
@@ -459,21 +645,62 @@ function Library.CreateWindow(opts)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(4, 4),
-		BackgroundColor3 = Theme.accent,
+		BackgroundColor3 = Color3.fromRGB(255, 90, 110),
 		BorderSizePixel = 0,
 		ZIndex = 252,
 		Active = false,
 	}, menuCursor)
-	corner(cursorDot, 2)
+	corner(cursorDot, 99)
+
+	-- hint chip (visible while menu closed — matches Rivals Assist)
+	local hintLabel = mk("TextLabel", {
+		Name = "Hint",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -14, 0, 14),
+		Size = UDim2.fromOffset(168, 26),
+		BackgroundColor3 = Theme.bg,
+		BackgroundTransparency = 0.08,
+		Font = Enum.Font.GothamBold,
+		TextSize = 11,
+		TextColor3 = Theme.text,
+		ZIndex = 5,
+		Text = title .. "  ·  RightShift",
+		Visible = true,
+	}, screen)
+	corner(hintLabel, 6)
+	local hintStroke = stroke(hintLabel, Theme.accent, 1, 0.35)
+
+	-- toast stack
+	local toastHold = mk("Frame", {
+		Name = "Toasts",
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -16, 1, -16),
+		Size = UDim2.fromOffset(280, 220),
+		BackgroundTransparency = 1,
+		ZIndex = 80,
+	}, screen)
+	mk("UIListLayout", {
+		FillDirection = Enum.FillDirection.Vertical,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+	}, toastHold)
 
 	-- header
 	local header = mk("Frame", {
+		Name = "Header",
 		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
 		Position = UDim2.fromOffset(0, 2),
 		Size = UDim2.new(1, 0, 0, 46),
 	}, root)
 	corner(header, 8)
+	mk("Frame", {
+		Size = UDim2.new(1, 0, 0, 12),
+		Position = UDim2.new(0, 0, 1, -12),
+		BackgroundColor3 = Theme.panel,
+		BorderSizePixel = 0,
+	}, header)
 
 	local brandBadge = mk("Frame", {
 		BackgroundColor3 = Theme.accent,
@@ -527,58 +754,70 @@ function Library.CreateWindow(opts)
 	}, header)
 	corner(closeBtn, 5)
 
-	-- body: sidebar + content
+	-- body: sidebar + content (Rivals content chrome)
 	local body = mk("Frame", {
+		Name = "BodyRow",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(8, 52),
-		Size = UDim2.new(1, -16, 1, -82),
+		Position = UDim2.fromOffset(8, 50),
+		Size = UDim2.new(1, -16, 1, -80),
 	}, root)
 
-	local sidebar = mk("ScrollingFrame", {
-		BackgroundColor3 = Theme.sidebar,
+	local sidebar = mk("Frame", {
+		Name = "Sidebar",
+		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
 		Size = UDim2.new(0, 128, 1, 0),
+		ClipsDescendants = true,
+	}, body)
+	corner(sidebar, 6)
+	stroke(sidebar, Theme.stroke, 1, 0)
+	local sidebarNav = mk("ScrollingFrame", {
+		Name = "Nav",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 2,
 		ScrollBarImageColor3 = Theme.accentDim,
-	}, body)
-	corner(sidebar, 6)
-	stroke(sidebar, Theme.stroke, 1, 0.2)
-	pad(sidebar, 8, 8, 8, 8)
-	mk("UIListLayout", {
-		Padding = UDim.new(0, 6),
-		SortOrder = Enum.SortOrder.LayoutOrder,
+		ZIndex = 2,
 	}, sidebar)
+	pad(sidebarNav, 8, 8, 6, 6)
+	mk("UIListLayout", {
+		Padding = UDim.new(0, 4),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+	}, sidebarNav)
 
 	local content = mk("Frame", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(136, 0),
+		Name = "Content",
+		BackgroundColor3 = Theme.panel,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 136, 0, 0),
 		Size = UDim2.new(1, -136, 1, 0),
 	}, body)
-
-	local contentHeader = mk("Frame", {
-		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(14, 10),
-		Size = UDim2.new(1, -28, 0, 28),
-	}, content)
+	corner(content, 6)
+	stroke(content, Theme.stroke, 1, 0)
 
 	local pageTitle = mk("TextLabel", {
+		Name = "PageTitle",
 		BackgroundTransparency = 1,
-		Size = UDim2.new(0.45, 0, 1, 0),
+		Position = UDim2.fromOffset(12, 8),
+		Size = UDim2.new(0.55, 0, 0, 18),
 		Font = Enum.Font.GothamBold,
 		Text = "",
 		TextColor3 = Theme.text,
-		TextSize = 15,
+		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
-	}, contentHeader)
+		ZIndex = 3,
+	}, content)
 
 	local searchBox = mk("TextBox", {
+		Name = "Search",
 		BackgroundColor3 = Theme.panelAlt,
 		BorderSizePixel = 0,
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, 0, 0.5, 0),
-		Size = UDim2.fromOffset(150, 26),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -10, 0, 6),
+		Size = UDim2.fromOffset(150, 22),
 		Font = Enum.Font.Gotham,
 		PlaceholderText = "Search...",
 		PlaceholderColor3 = Theme.textDim,
@@ -586,43 +825,52 @@ function Library.CreateWindow(opts)
 		TextColor3 = Theme.text,
 		TextSize = 11,
 		ClearTextOnFocus = false,
-	}, contentHeader)
-	corner(searchBox, 8)
-	pad(searchBox, 0, 0, 10, 10)
+		ZIndex = 6,
+	}, content)
+	corner(searchBox, 5)
 
 	local pagesFolder = mk("Frame", {
+		Name = "Pages",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(14, 44),
-		Size = UDim2.new(1, -28, 1, -52),
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(8, 32),
+		Size = UDim2.new(1, -12, 1, -38),
+		ClipsDescendants = true,
 	}, content)
 
 	-- footer
 	local footer = mk("Frame", {
+		Name = "Footer",
 		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 0, 1, 0),
-		Size = UDim2.new(1, 0, 0, 28),
+		Size = UDim2.new(1, 0, 0, 26),
 	}, root)
+	mk("Frame", {
+		Size = UDim2.new(1, 0, 0, 10),
+		BackgroundColor3 = Theme.panel,
+		BorderSizePixel = 0,
+	}, footer)
 	local footerLabel = mk("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(14, 0),
-		Size = UDim2.new(1, -28, 1, 0),
+		Position = UDim2.fromOffset(12, 0),
+		Size = UDim2.new(0.55, 0, 1, 0),
 		Font = Enum.Font.Gotham,
 		Text = "Ready",
 		TextColor3 = Theme.textDim,
-		TextSize = 11,
+		TextSize = 10,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	}, footer)
 	local pulseLabel = mk("TextLabel", {
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(120, 18),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 0),
+		Size = UDim2.new(0.42, 0, 1, 0),
 		Font = Enum.Font.GothamBold,
 		Text = "",
 		TextColor3 = Theme.cyan,
-		TextSize = 11,
+		TextSize = 10,
 		TextXAlignment = Enum.TextXAlignment.Right,
 	}, footer)
 
@@ -661,11 +909,62 @@ function Library.CreateWindow(opts)
 	end
 
 	function window:Notify(text, color)
-		pulseLabel.Text = tostring(text or "")
-		pulseLabel.TextColor3 = color or Theme.cyan
-		task.delay(1.2, function()
-			if pulseLabel.Text == tostring(text or "") then
+		text = tostring(text or "")
+		color = color or Theme.cyan
+		pulseLabel.Text = text
+		pulseLabel.TextColor3 = color
+		task.delay(1.4, function()
+			if pulseLabel.Text == text then
 				pulseLabel.Text = ""
+			end
+		end)
+
+		local toast = mk("Frame", {
+			BackgroundColor3 = Theme.panel,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			ZIndex = 81,
+		}, toastHold)
+		corner(toast, 8)
+		local tStroke = stroke(toast, color, 1, 0.35)
+		tStroke.Transparency = 1
+		pad(toast, 10, 10, 12, 12)
+		local tLabel = mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Font = Enum.Font.Gotham,
+			Text = text,
+			TextColor3 = Theme.text,
+			TextSize = 12,
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTransparency = 1,
+			ZIndex = 82,
+		}, toast)
+		mk("Frame", {
+			Size = UDim2.new(0, 3, 1, 0),
+			Position = UDim2.fromOffset(-12, 0),
+			BackgroundColor3 = color,
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			ZIndex = 82,
+		}, toast)
+		TweenService:Create(toast, TweenInfo.new(0.18), { BackgroundTransparency = 0.05 }):Play()
+		TweenService:Create(tStroke, TweenInfo.new(0.18), { Transparency = 0.35 }):Play()
+		TweenService:Create(tLabel, TweenInfo.new(0.18), { TextTransparency = 0 }):Play()
+		task.delay(2.4, function()
+			if not toast.Parent then
+				return
+			end
+			TweenService:Create(toast, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(tStroke, TweenInfo.new(0.22), { Transparency = 1 }):Play()
+			TweenService:Create(tLabel, TweenInfo.new(0.22), { TextTransparency = 1 }):Play()
+			task.wait(0.24)
+			if toast.Parent then
+				toast:Destroy()
 			end
 		end)
 	end
@@ -702,14 +1001,14 @@ function Library.CreateWindow(opts)
 			AutoButtonColor = false,
 			BackgroundColor3 = Theme.tabIdle,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, 0, 0, 32),
+			Size = UDim2.new(1, -4, 0, 30),
 			Font = Enum.Font.GothamBold,
 			Text = name,
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			LayoutOrder = order,
-		}, sidebar)
-		corner(btn, 9)
+		}, sidebarNav)
+		corner(btn, 6)
 
 		local page = mk("ScrollingFrame", {
 			Name = "Page_" .. name,
@@ -804,6 +1103,7 @@ function Library.CreateWindow(opts)
 		pcall(function()
 			menuModal.Modal = false
 			menuModal.Visible = false
+			menuModal.BackgroundTransparency = 0.62
 			menuCursor.Visible = false
 			if window._savedMouseBehavior ~= nil then
 				UserInputService.MouseBehavior = window._savedMouseBehavior
@@ -834,8 +1134,8 @@ function Library.CreateWindow(opts)
 			menuCursor.Position = UDim2.fromOffset(loc.X, loc.Y)
 		else
 			menuModal.Modal = false
-			menuModal.Visible = false
 			menuCursor.Visible = false
+			-- leave modal visible briefly so close fade can finish; restoreGameMouse hides it
 		end
 	end
 
@@ -852,21 +1152,35 @@ function Library.CreateWindow(opts)
 			end)
 		end
 		self._open = visible
+		hintLabel.Visible = not visible
 		root.Visible = visible
 		if visible then
 			if not root:GetAttribute("Moved") then
 				root.Position = UDim2.fromScale(0.5, 0.5)
 			end
+			menuModal.Visible = true
+			menuModal.BackgroundTransparency = 1
+			TweenService:Create(menuModal, TweenInfo.new(0.18), { BackgroundTransparency = 0.62 }):Play()
 			openScale.Scale = 0.92
 			TweenService:Create(
 				openScale,
 				TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 				{ Scale = 1 }
 			):Play()
-		end
-		applyMenuMouseState()
-		if not visible then
-			restoreGameMouse()
+			applyMenuMouseState()
+		else
+			TweenService:Create(menuModal, TweenInfo.new(0.16), { BackgroundTransparency = 1 }):Play()
+			TweenService:Create(
+				openScale,
+				TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ Scale = 0.96 }
+			):Play()
+			task.delay(0.14, function()
+				if not window._open then
+					restoreGameMouse()
+				end
+			end)
+			applyMenuMouseState()
 		end
 		if opts.OnOpenChanged then
 			pcall(opts.OnOpenChanged, visible)
@@ -895,13 +1209,15 @@ function Library.CreateWindow(opts)
 		end
 	end
 
-	-- drag
+	-- drag (viewport-stable via RenderStepped)
 	do
-		local dragging, dragStart, startPos = false, nil, nil
+		local dragging = false
+		local dragStart = Vector2.zero
+		local startPos = UDim2.fromScale(0.5, 0.5)
 		header.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				dragging = true
-				dragStart = input.Position
+				dragStart = UserInputService:GetMouseLocation()
 				startPos = root.Position
 			end
 		end)
@@ -910,15 +1226,24 @@ function Library.CreateWindow(opts)
 				dragging = false
 			end
 		end)
-		bind(UserInputService.InputChanged:Connect(function(input)
-			if not dragging then
+		bind(UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end))
+		bind(RunService.RenderStepped:Connect(function()
+			if not dragging or not window._open then
 				return
 			end
-			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-				local d = input.Position - dragStart
-				root:SetAttribute("Moved", true)
-				root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-			end
+			local m = UserInputService:GetMouseLocation()
+			local d = m - dragStart
+			root:SetAttribute("Moved", true)
+			root.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + d.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + d.Y
+			)
 		end))
 	end
 
@@ -1018,7 +1343,7 @@ function Library.CreateWindow(opts)
 			Font = Enum.Font.Gotham,
 			TextSize = 11,
 			TextColor3 = Theme.textDim,
-			Text = "Loading",
+			Text = "Loading...",
 			ZIndex = 402,
 		}, card)
 		local track = mk("Frame", {
@@ -1037,6 +1362,17 @@ function Library.CreateWindow(opts)
 		}, track)
 		corner(fill, 3)
 
+		local bootAlive = true
+		task.spawn(function()
+			local n = 0
+			while bootAlive and bootSub.Parent and string.sub(bootSub.Text, 1, 7) == "Loading" do
+				n = (n % 3) + 1
+				bootSub.Text = "Loading" .. string.rep(".", n)
+				task.wait(0.28)
+			end
+		end)
+
+		hintLabel.Visible = false
 		TweenService:Create(overlay, TweenInfo.new(0.28), { BackgroundTransparency = 0.22 }):Play()
 		TweenService:Create(card, TweenInfo.new(0.28), { BackgroundTransparency = 0 }):Play()
 		TweenService:Create(cardStroke, TweenInfo.new(0.28), { Transparency = 0.25 }):Play()
@@ -1050,11 +1386,13 @@ function Library.CreateWindow(opts)
 			TweenInfo.new(0.9, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 			{ Size = UDim2.new(1, 0, 1, 0) }
 		):Play()
-		task.wait(0.42)
+		task.wait(0.85)
+		bootAlive = false
 		if bootSub.Parent then
 			bootSub.Text = "Ready"
+			bootSub.TextColor3 = Theme.mint
 		end
-		task.wait(0.7)
+		task.wait(0.55)
 		TweenService:Create(
 			overlay,
 			TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.In),

@@ -433,9 +433,10 @@ local function makeSection(host, title)
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, 0, 0, 52),
 			LayoutOrder = nextOrder(),
-			ZIndex = 20,
+			ZIndex = 5,
 		}, card)
 		trackSearch(opts.Text, row)
+
 		mk("TextLabel", {
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, 0, 0, 16),
@@ -446,50 +447,128 @@ local function makeSection(host, title)
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}, row)
 
-		local btn = mk("TextButton", {
+		-- Hub-style trigger (ZeroHub / Linoria-like)
+		local trigger = mk("TextButton", {
 			AutoButtonColor = false,
 			BackgroundColor3 = Theme.panelAlt,
 			BorderSizePixel = 0,
 			Position = UDim2.fromOffset(0, 20),
-			Size = UDim2.new(1, 0, 0, 28),
+			Size = UDim2.new(1, 0, 0, 30),
+			Text = "",
+			ZIndex = 6,
+		}, row)
+		corner(trigger, 6)
+		local triggerStroke = stroke(trigger, Theme.stroke, 1, 0.2)
+
+		local valueLabel = mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(10, 0),
+			Size = UDim2.new(1, -36, 1, 0),
 			Font = Enum.Font.GothamBold,
-			Text = "  " .. value .. "   ▾",
+			Text = value,
 			TextColor3 = Theme.text,
 			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			ZIndex = 21,
-		}, row)
-		corner(btn, 8)
-		stroke(btn, Theme.stroke, 1, 0.35)
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			ZIndex = 7,
+		}, trigger)
 
+		local chevron = mk("TextLabel", {
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(16, 16),
+			Font = Enum.Font.GothamBold,
+			Text = "v",
+			TextColor3 = Theme.textDim,
+			TextSize = 11,
+			ZIndex = 7,
+		}, trigger)
+
+		local overlayGui = card:FindFirstAncestorOfClass("ScreenGui")
 		local open = false
-		local menu = mk("ScrollingFrame", {
-			BackgroundColor3 = Theme.bg,
+		local menu = mk("Frame", {
+			Name = "DropdownMenu",
+			BackgroundColor3 = Theme.panel,
 			BorderSizePixel = 0,
-			Position = UDim2.fromOffset(0, 50),
-			Size = UDim2.new(1, 0, 0, math.min(28 * #options, 140)),
 			Visible = false,
-			ZIndex = 60,
+			ZIndex = 220,
+			ClipsDescendants = true,
+		}, overlayGui or row)
+		corner(menu, 6)
+		stroke(menu, Theme.accent, 1, 0.35)
+
+		local list = mk("ScrollingFrame", {
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.fromScale(1, 1),
 			ScrollBarThickness = 3,
+			ScrollBarImageColor3 = Theme.accent,
 			CanvasSize = UDim2.new(0, 0, 0, 0),
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		}, row)
-		corner(menu, 8)
-		stroke(menu, Theme.accentDim, 1, 0.3)
-		pad(menu, 4, 4, 4, 4)
+			ZIndex = 221,
+		}, menu)
+		pad(list, 4, 4, 4, 4)
 		mk("UIListLayout", {
 			Padding = UDim.new(0, 3),
 			SortOrder = Enum.SortOrder.LayoutOrder,
-		}, menu)
+		}, list)
 
 		local ctrl = {}
+		local itemButtons = {}
+
+		local function refreshItemStyles()
+			for _, item in ipairs(itemButtons) do
+				local selected = item.Name == value
+				item.BackgroundColor3 = selected and Theme.accentDim or Theme.panelAlt
+				item.TextColor3 = Theme.text
+				local mark = item:FindFirstChild("Sel")
+				if mark then
+					mark.BackgroundTransparency = selected and 0 or 1
+				end
+			end
+		end
+
 		local function setValue(v, silent)
 			value = tostring(v)
-			btn.Text = "  " .. value .. "   ▾"
+			valueLabel.Text = value
+			refreshItemStyles()
 			if not silent and opts.Callback then
 				opts.Callback(value)
 			end
 		end
+
+		local function placeMenu()
+			if not overlayGui then
+				menu.Position = UDim2.fromOffset(0, 52)
+				menu.Size = UDim2.new(1, 0, 0, math.min(32 * #options + 8, 168))
+				return
+			end
+			local pos = trigger.AbsolutePosition
+			local size = trigger.AbsoluteSize
+			local yOff = 0
+			if not overlayGui.IgnoreGuiInset then
+				yOff = game:GetService("GuiService"):GetGuiInset().Y
+			end
+			menu.Position = UDim2.fromOffset(pos.X, pos.Y + size.Y + 4 - yOff)
+			menu.Size = UDim2.fromOffset(math.max(120, size.X), math.min(32 * #options + 8, 168))
+		end
+
+		local function setOpen(state)
+			open = state and true or false
+			chevron.Text = open and "^" or "v"
+			chevron.TextColor3 = open and Theme.accent or Theme.textDim
+			triggerStroke.Color = open and Theme.accent or Theme.stroke
+			triggerStroke.Transparency = open and 0.1 or 0.2
+			trigger.BackgroundColor3 = Theme.panelAlt
+			if open then
+				placeMenu()
+				menu.Visible = true
+			else
+				menu.Visible = false
+			end
+		end
+
 		function ctrl:Get()
 			return value
 		end
@@ -498,54 +577,120 @@ local function makeSection(host, title)
 				setValue(v, silent)
 			end
 		end
-		function ctrl:SetOptions(list, keep)
+		function ctrl:SetOptions(listOpts, keep)
 			table.clear(options)
-			for _, child in ipairs(menu:GetChildren()) do
+			table.clear(itemButtons)
+			for _, child in ipairs(list:GetChildren()) do
 				if child:IsA("TextButton") then
 					child:Destroy()
 				end
 			end
-			for _, v in ipairs(list or {}) do
+			for _, v in ipairs(listOpts or {}) do
 				table.insert(options, tostring(v))
 			end
 			if #options == 0 then
 				options = { "None" }
 			end
-			menu.Size = UDim2.new(1, 0, 0, math.min(28 * #options, 140))
 			for i, opt in ipairs(options) do
 				local item = mk("TextButton", {
+					Name = opt,
 					AutoButtonColor = false,
 					BackgroundColor3 = Theme.panelAlt,
 					BorderSizePixel = 0,
-					Size = UDim2.new(1, 0, 0, 24),
-					Font = Enum.Font.Gotham,
-					Text = opt,
+					Size = UDim2.new(1, 0, 0, 28),
+					Font = Enum.Font.GothamMedium,
+					Text = "  " .. opt,
 					TextColor3 = Theme.text,
-					TextSize = 11,
+					TextSize = 12,
+					TextXAlignment = Enum.TextXAlignment.Left,
 					LayoutOrder = i,
-					ZIndex = 61,
-				}, menu)
-				corner(item, 6)
+					ZIndex = 222,
+				}, list)
+				corner(item, 5)
+				local sel = mk("Frame", {
+					Name = "Sel",
+					BackgroundColor3 = Theme.accent,
+					BorderSizePixel = 0,
+					Size = UDim2.new(0, 3, 1, -8),
+					Position = UDim2.fromOffset(2, 4),
+					BackgroundTransparency = 1,
+					ZIndex = 223,
+				}, item)
+				corner(sel, 2)
+				item.MouseEnter:Connect(function()
+					if item.Name ~= value then
+						item.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+					end
+				end)
+				item.MouseLeave:Connect(function()
+					refreshItemStyles()
+				end)
 				item.MouseButton1Click:Connect(function()
 					setValue(opt, false)
-					open = false
-					menu.Visible = false
-					row.Size = UDim2.new(1, 0, 0, 52)
+					setOpen(false)
 				end)
+				table.insert(itemButtons, item)
 			end
 			if keep and table.find(options, value) then
 				setValue(value, true)
 			else
 				setValue(options[1], true)
 			end
+			if open then
+				placeMenu()
+			end
 		end
 
 		ctrl:SetOptions(options, true)
 
-		btn.MouseButton1Click:Connect(function()
-			open = not open
-			menu.Visible = open
-			row.Size = UDim2.new(1, 0, 0, open and (56 + menu.Size.Y.Offset) or 52)
+		trigger.MouseButton1Click:Connect(function()
+			setOpen(not open)
+		end)
+		trigger.MouseEnter:Connect(function()
+			if not open then
+				tween(trigger, { BackgroundColor3 = Color3.fromRGB(38, 38, 48) }, 0.1)
+			end
+		end)
+		trigger.MouseLeave:Connect(function()
+			if not open then
+				tween(trigger, { BackgroundColor3 = Theme.panelAlt }, 0.1)
+			end
+		end)
+
+		UserInputService.InputBegan:Connect(function(input)
+			if not open then
+				return
+			end
+			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+				return
+			end
+			local p = UserInputService:GetMouseLocation()
+			local mPos, mSize = menu.AbsolutePosition, menu.AbsoluteSize
+			local tPos, tSize = trigger.AbsolutePosition, trigger.AbsoluteSize
+			local inMenu = p.X >= mPos.X and p.X <= mPos.X + mSize.X and p.Y >= mPos.Y and p.Y <= mPos.Y + mSize.Y
+			local inTrig = p.X >= tPos.X and p.X <= tPos.X + tSize.X and p.Y >= tPos.Y and p.Y <= tPos.Y + tSize.Y
+			if not inMenu and not inTrig then
+				setOpen(false)
+			end
+		end)
+
+		if overlayGui then
+			trigger:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+				if open then
+					placeMenu()
+				end
+			end)
+			trigger:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				if open then
+					placeMenu()
+				end
+			end)
+		end
+
+		row.Destroying:Connect(function()
+			if menu and menu.Parent then
+				menu:Destroy()
+			end
 		end)
 
 		return ctrl

@@ -429,9 +429,20 @@ local function makeSection(host, title)
 			value = options[1]
 		end
 
+		local function pretty(v)
+			v = tostring(v or "")
+			if v == "" then
+				return v
+			end
+			if string.upper(v) == v and #v > 1 then
+				return v
+			end
+			return string.upper(string.sub(v, 1, 1)) .. string.sub(v, 2)
+		end
+
 		local row = mk("Frame", {
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 52),
+			Size = UDim2.new(1, 0, 0, 58),
 			LayoutOrder = nextOrder(),
 			ZIndex = 5,
 		}, card)
@@ -439,99 +450,140 @@ local function makeSection(host, title)
 
 		mk("TextLabel", {
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, 0, 0, 16),
+			Size = UDim2.new(1, 0, 0, 14),
 			Font = Enum.Font.GothamMedium,
 			Text = tostring(opts.Text or "Select"),
-			TextColor3 = Theme.text,
-			TextSize = 12,
+			TextColor3 = Theme.textDim,
+			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
 		}, row)
 
-		-- Hub-style trigger (ZeroHub / Linoria-like)
 		local trigger = mk("TextButton", {
 			AutoButtonColor = false,
-			BackgroundColor3 = Theme.panelAlt,
+			BackgroundColor3 = Color3.fromRGB(32, 32, 42),
 			BorderSizePixel = 0,
-			Position = UDim2.fromOffset(0, 20),
-			Size = UDim2.new(1, 0, 0, 30),
+			Position = UDim2.fromOffset(0, 18),
+			Size = UDim2.new(1, 0, 0, 36),
 			Text = "",
+			ClipsDescendants = true,
 			ZIndex = 6,
 		}, row)
-		corner(trigger, 6)
-		local triggerStroke = stroke(trigger, Theme.stroke, 1, 0.2)
+		corner(trigger, 8)
+		local triggerStroke = stroke(trigger, Theme.stroke, 1, 0.15)
+		mk("UIGradient", {
+			Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+				ColorSequenceKeypoint.new(1, Color3.fromRGB(190, 190, 210)),
+			}),
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.92),
+				NumberSequenceKeypoint.new(1, 0.97),
+			}),
+			Rotation = 90,
+		}, trigger)
 
 		local valueLabel = mk("TextLabel", {
 			BackgroundTransparency = 1,
-			Position = UDim2.fromOffset(10, 0),
-			Size = UDim2.new(1, -36, 1, 0),
+			Position = UDim2.fromOffset(12, 0),
+			Size = UDim2.new(1, -48, 1, 0),
 			Font = Enum.Font.GothamBold,
-			Text = value,
+			Text = pretty(value),
 			TextColor3 = Theme.text,
-			TextSize = 12,
+			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 7,
 		}, trigger)
 
+		local chip = mk("Frame", {
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -8, 0.5, 0),
+			Size = UDim2.fromOffset(24, 24),
+			BackgroundColor3 = Color3.fromRGB(24, 24, 32),
+			BorderSizePixel = 0,
+			ZIndex = 7,
+		}, trigger)
+		corner(chip, 6)
+		local chipStroke = stroke(chip, Theme.stroke, 1, 0.35)
 		local chevron = mk("TextLabel", {
 			BackgroundTransparency = 1,
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -10, 0.5, 0),
-			Size = UDim2.fromOffset(16, 16),
+			Size = UDim2.fromScale(1, 1),
 			Font = Enum.Font.GothamBold,
 			Text = "v",
 			TextColor3 = Theme.textDim,
-			TextSize = 11,
-			ZIndex = 7,
-		}, trigger)
+			TextSize = 12,
+			ZIndex = 8,
+		}, chip)
 
 		local overlayGui = card:FindFirstAncestorOfClass("ScreenGui")
 		local open = false
+
+		local shadow = mk("Frame", {
+			Name = "DropdownShadow",
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.55,
+			BorderSizePixel = 0,
+			Visible = false,
+			ZIndex = 219,
+		}, overlayGui or row)
+		corner(shadow, 10)
+
 		local menu = mk("Frame", {
 			Name = "DropdownMenu",
-			BackgroundColor3 = Theme.panel,
+			BackgroundColor3 = Color3.fromRGB(18, 18, 24),
 			BorderSizePixel = 0,
 			Visible = false,
 			ZIndex = 220,
 			ClipsDescendants = true,
 		}, overlayGui or row)
-		corner(menu, 6)
-		stroke(menu, Theme.accent, 1, 0.35)
+		corner(menu, 10)
+		stroke(menu, Color3.fromRGB(255, 255, 255), 1, 0.88)
+		local menuScale = mk("UIScale", { Scale = 0.96 }, menu)
 
 		local list = mk("ScrollingFrame", {
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			Size = UDim2.fromScale(1, 1),
-			ScrollBarThickness = 3,
+			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = Theme.accent,
 			CanvasSize = UDim2.new(0, 0, 0, 0),
 			AutomaticCanvasSize = Enum.AutomaticSize.Y,
 			ZIndex = 221,
 		}, menu)
-		pad(list, 4, 4, 4, 4)
+		pad(list, 6, 6, 6, 6)
 		mk("UIListLayout", {
-			Padding = UDim.new(0, 3),
+			Padding = UDim.new(0, 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}, list)
 
 		local ctrl = {}
 		local itemButtons = {}
 
+		local function menuHeight()
+			return math.min(6 + (#options * 36) + ((#options - 1) * 4) + 6, 196)
+		end
+
 		local function refreshItemStyles()
 			for _, item in ipairs(itemButtons) do
-				local selected = item.Name == value
-				item.BackgroundColor3 = selected and Theme.accentDim or Theme.panelAlt
-				item.TextColor3 = Theme.text
-				local mark = item:FindFirstChild("Sel")
-				if mark then
-					mark.BackgroundTransparency = selected and 0 or 1
+				local selected = item:GetAttribute("Opt") == value
+				local body = item:FindFirstChild("Body")
+				local check = item:FindFirstChild("Check")
+				local bar = item:FindFirstChild("Sel")
+				if body then
+					body.BackgroundColor3 = selected and Color3.fromRGB(36, 38, 64) or Color3.fromRGB(28, 28, 36)
+				end
+				if check then
+					check.TextTransparency = selected and 0 or 1
+				end
+				if bar then
+					bar.BackgroundTransparency = selected and 0 or 1
 				end
 			end
 		end
 
 		local function setValue(v, silent)
 			value = tostring(v)
-			valueLabel.Text = value
+			valueLabel.Text = pretty(value)
 			refreshItemStyles()
 			if not silent and opts.Callback then
 				opts.Callback(value)
@@ -539,9 +591,12 @@ local function makeSection(host, title)
 		end
 
 		local function placeMenu()
+			local h = menuHeight()
 			if not overlayGui then
-				menu.Position = UDim2.fromOffset(0, 52)
-				menu.Size = UDim2.new(1, 0, 0, math.min(32 * #options + 8, 168))
+				menu.Position = UDim2.fromOffset(0, 58)
+				menu.Size = UDim2.new(1, 0, 0, h)
+				shadow.Position = UDim2.fromOffset(2, 60)
+				shadow.Size = UDim2.new(1, 0, 0, h)
 				return
 			end
 			local pos = trigger.AbsolutePosition
@@ -550,22 +605,40 @@ local function makeSection(host, title)
 			if not overlayGui.IgnoreGuiInset then
 				yOff = game:GetService("GuiService"):GetGuiInset().Y
 			end
-			menu.Position = UDim2.fromOffset(pos.X, pos.Y + size.Y + 4 - yOff)
-			menu.Size = UDim2.fromOffset(math.max(120, size.X), math.min(32 * #options + 8, 168))
+			local x, y = pos.X, pos.Y + size.Y + 6 - yOff
+			local w = math.max(140, size.X)
+			menu.Position = UDim2.fromOffset(x, y)
+			menu.Size = UDim2.fromOffset(w, h)
+			shadow.Position = UDim2.fromOffset(x + 2, y + 3)
+			shadow.Size = UDim2.fromOffset(w, h)
 		end
 
 		local function setOpen(state)
 			open = state and true or false
 			chevron.Text = open and "^" or "v"
 			chevron.TextColor3 = open and Theme.accent or Theme.textDim
+			chip.BackgroundColor3 = open and Color3.fromRGB(32, 34, 58) or Color3.fromRGB(24, 24, 32)
 			triggerStroke.Color = open and Theme.accent or Theme.stroke
-			triggerStroke.Transparency = open and 0.1 or 0.2
-			trigger.BackgroundColor3 = Theme.panelAlt
+			triggerStroke.Transparency = open and 0.05 or 0.15
+			chipStroke.Color = open and Theme.accent or Theme.stroke
 			if open then
 				placeMenu()
 				menu.Visible = true
+				shadow.Visible = true
+				menuScale.Scale = 0.94
+				TweenService:Create(menuScale, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+					Scale = 1,
+				}):Play()
 			else
-				menu.Visible = false
+				TweenService:Create(menuScale, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+					Scale = 0.96,
+				}):Play()
+				task.delay(0.08, function()
+					if not open then
+						menu.Visible = false
+						shadow.Visible = false
+					end
+				end)
 			end
 		end
 
@@ -578,6 +651,10 @@ local function makeSection(host, title)
 			end
 		end
 		function ctrl:SetOptions(listOpts, keep)
+			local incoming = {}
+			for _, v in ipairs(listOpts or {}) do
+				table.insert(incoming, tostring(v))
+			end
 			table.clear(options)
 			table.clear(itemButtons)
 			for _, child in ipairs(list:GetChildren()) do
@@ -585,41 +662,72 @@ local function makeSection(host, title)
 					child:Destroy()
 				end
 			end
-			for _, v in ipairs(listOpts or {}) do
-				table.insert(options, tostring(v))
+			for _, v in ipairs(incoming) do
+				table.insert(options, v)
 			end
 			if #options == 0 then
-				options = { "None" }
+				table.insert(options, "None")
 			end
 			for i, opt in ipairs(options) do
 				local item = mk("TextButton", {
-					Name = opt,
+					Name = "Opt_" .. i,
 					AutoButtonColor = false,
-					BackgroundColor3 = Theme.panelAlt,
+					BackgroundTransparency = 1,
 					BorderSizePixel = 0,
-					Size = UDim2.new(1, 0, 0, 28),
-					Font = Enum.Font.GothamMedium,
-					Text = "  " .. opt,
-					TextColor3 = Theme.text,
-					TextSize = 12,
-					TextXAlignment = Enum.TextXAlignment.Left,
+					Size = UDim2.new(1, 0, 0, 32),
+					Text = "",
 					LayoutOrder = i,
 					ZIndex = 222,
 				}, list)
-				corner(item, 5)
-				local sel = mk("Frame", {
+				item:SetAttribute("Opt", opt)
+
+				local body = mk("Frame", {
+					Name = "Body",
+					BackgroundColor3 = Color3.fromRGB(28, 28, 36),
+					BorderSizePixel = 0,
+					Size = UDim2.fromScale(1, 1),
+					ZIndex = 222,
+				}, item)
+				corner(body, 7)
+				local bar = mk("Frame", {
 					Name = "Sel",
 					BackgroundColor3 = Theme.accent,
 					BorderSizePixel = 0,
-					Size = UDim2.new(0, 3, 1, -8),
-					Position = UDim2.fromOffset(2, 4),
+					Size = UDim2.new(0, 3, 1, -10),
+					Position = UDim2.fromOffset(4, 5),
 					BackgroundTransparency = 1,
+					ZIndex = 224,
+				}, item)
+				corner(bar, 2)
+				mk("TextLabel", {
+					BackgroundTransparency = 1,
+					Position = UDim2.fromOffset(14, 0),
+					Size = UDim2.new(1, -40, 1, 0),
+					Font = Enum.Font.GothamMedium,
+					Text = pretty(opt),
+					TextColor3 = Theme.text,
+					TextSize = 12,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextTruncate = Enum.TextTruncate.AtEnd,
 					ZIndex = 223,
 				}, item)
-				corner(sel, 2)
+				mk("TextLabel", {
+					Name = "Check",
+					BackgroundTransparency = 1,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -10, 0.5, 0),
+					Size = UDim2.fromOffset(16, 16),
+					Font = Enum.Font.GothamBold,
+					Text = "+",
+					TextColor3 = Color3.fromRGB(180, 190, 255),
+					TextSize = 14,
+					TextTransparency = 1,
+					ZIndex = 224,
+				}, item)
+
 				item.MouseEnter:Connect(function()
-					if item.Name ~= value then
-						item.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+					if item:GetAttribute("Opt") ~= value then
+						body.BackgroundColor3 = Color3.fromRGB(44, 44, 58)
 					end
 				end)
 				item.MouseLeave:Connect(function()
@@ -648,12 +756,12 @@ local function makeSection(host, title)
 		end)
 		trigger.MouseEnter:Connect(function()
 			if not open then
-				tween(trigger, { BackgroundColor3 = Color3.fromRGB(38, 38, 48) }, 0.1)
+				tween(trigger, { BackgroundColor3 = Color3.fromRGB(40, 40, 54) }, 0.12)
 			end
 		end)
 		trigger.MouseLeave:Connect(function()
 			if not open then
-				tween(trigger, { BackgroundColor3 = Theme.panelAlt }, 0.1)
+				tween(trigger, { BackgroundColor3 = Color3.fromRGB(32, 32, 42) }, 0.12)
 			end
 		end)
 
@@ -690,6 +798,9 @@ local function makeSection(host, title)
 		row.Destroying:Connect(function()
 			if menu and menu.Parent then
 				menu:Destroy()
+			end
+			if shadow and shadow.Parent then
+				shadow:Destroy()
 			end
 		end)
 

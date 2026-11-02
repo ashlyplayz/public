@@ -378,6 +378,8 @@ function Library.CreateWindow(opts)
 	local subtitle = tostring(opts.Subtitle or "Ready")
 	local size = opts.Size or UDim2.fromOffset(640, 540)
 	local toggleKey = opts.ToggleKey or Enum.KeyCode.RightShift
+	local showBoot = opts.Boot ~= false
+	local unlockName = "PLUI_MouseUnlock_" .. tostring(math.random(10000, 99999))
 
 	local connections = {}
 	local function bind(sig)
@@ -389,9 +391,24 @@ function Library.CreateWindow(opts)
 		Name = opts.Name or "PLUIWindow",
 		ResetOnSpawn = false,
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-		DisplayOrder = opts.DisplayOrder or 1300,
+		DisplayOrder = opts.DisplayOrder or 120000,
 		IgnoreGuiInset = true,
 	}, parentGui())
+
+	-- Dim black overlay + Modal unlocks the game mouse while menu is open
+	local menuModal = mk("TextButton", {
+		Name = "MouseUnlock",
+		AutoButtonColor = false,
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.62,
+		BorderSizePixel = 0,
+		Size = UDim2.fromScale(1, 1),
+		Text = "",
+		Visible = false,
+		Modal = false,
+		Selectable = false,
+		ZIndex = 1,
+	}, screen)
 
 	local root = mk("Frame", {
 		Name = "Root",
@@ -401,16 +418,53 @@ function Library.CreateWindow(opts)
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = size,
 		ClipsDescendants = true,
+		Visible = false,
+		ZIndex = 10,
 	}, screen)
 	corner(root, 8)
 	stroke(root, Theme.stroke, 1, 0.15)
+	local openScale = mk("UIScale", { Name = "OpenScale", Scale = 1 }, root)
 	mk("Frame", {
 		Name = "Accent",
 		BackgroundColor3 = Theme.accent,
 		BorderSizePixel = 0,
 		Size = UDim2.new(1, 0, 0, 2),
-		ZIndex = 5,
+		ZIndex = 15,
 	}, root)
+
+	-- custom crosshair cursor (follows mouse while menu open)
+	local menuCursor = mk("Frame", {
+		Name = "MenuCursor",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.fromOffset(22, 22),
+		Visible = false,
+		ZIndex = 250,
+		Active = false,
+	}, screen)
+	local function cursorBar(barSize, barPos)
+		local f = mk("Frame", {
+			Size = barSize,
+			Position = barPos,
+			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			BorderSizePixel = 0,
+			ZIndex = 251,
+			Active = false,
+		}, menuCursor)
+		stroke(f, Color3.fromRGB(0, 0, 0), 1, 0)
+	end
+	cursorBar(UDim2.fromOffset(2, 22), UDim2.fromOffset(10, 0))
+	cursorBar(UDim2.fromOffset(22, 2), UDim2.fromOffset(0, 10))
+	local cursorDot = mk("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromOffset(4, 4),
+		BackgroundColor3 = Theme.accent,
+		BorderSizePixel = 0,
+		ZIndex = 252,
+		Active = false,
+	}, menuCursor)
+	corner(cursorDot, 2)
 
 	-- header
 	local header = mk("Frame", {
@@ -580,6 +634,10 @@ function Library.CreateWindow(opts)
 		_active = nil,
 		_flags = {},
 		_searchables = {},
+		_open = false,
+		_savedMouseBehavior = nil,
+		_savedMouseIcon = nil,
+		_alive = true,
 	}
 
 	local function applySearch(query)
@@ -742,7 +800,90 @@ function Library.CreateWindow(opts)
 		return tabApi
 	end
 
+	local function restoreGameMouse()
+		pcall(function()
+			menuModal.Modal = false
+			menuModal.Visible = false
+			menuCursor.Visible = false
+			if window._savedMouseBehavior ~= nil then
+				UserInputService.MouseBehavior = window._savedMouseBehavior
+			else
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			end
+			if window._savedMouseIcon ~= nil then
+				UserInputService.MouseIconEnabled = window._savedMouseIcon
+			else
+				UserInputService.MouseIconEnabled = true
+			end
+		end)
+	end
+
+	local function applyMenuMouseState()
+		if not window._alive then
+			return
+		end
+		if window._open then
+			pcall(function()
+				UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+				UserInputService.MouseIconEnabled = true
+			end)
+			menuModal.Visible = true
+			menuModal.Modal = true
+			menuCursor.Visible = true
+			local loc = UserInputService:GetMouseLocation()
+			menuCursor.Position = UDim2.fromOffset(loc.X, loc.Y)
+		else
+			menuModal.Modal = false
+			menuModal.Visible = false
+			menuCursor.Visible = false
+		end
+	end
+
+	function window:IsOpen()
+		return self._open == true
+	end
+
+	function window:SetOpen(visible)
+		visible = visible and true or false
+		if visible and not self._open then
+			pcall(function()
+				self._savedMouseBehavior = UserInputService.MouseBehavior
+				self._savedMouseIcon = UserInputService.MouseIconEnabled
+			end)
+		end
+		self._open = visible
+		root.Visible = visible
+		if visible then
+			if not root:GetAttribute("Moved") then
+				root.Position = UDim2.fromScale(0.5, 0.5)
+			end
+			openScale.Scale = 0.92
+			TweenService:Create(
+				openScale,
+				TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+				{ Scale = 1 }
+			):Play()
+		end
+		applyMenuMouseState()
+		if not visible then
+			restoreGameMouse()
+		end
+		if opts.OnOpenChanged then
+			pcall(opts.OnOpenChanged, visible)
+		end
+	end
+
+	function window:Toggle()
+		self:SetOpen(not self._open)
+	end
+
 	function window:Destroy()
+		self._alive = false
+		self._open = false
+		pcall(function()
+			RunService:UnbindFromRenderStep(unlockName)
+		end)
+		restoreGameMouse()
 		for _, c in ipairs(connections) do
 			pcall(function()
 				c:Disconnect()
@@ -775,6 +916,7 @@ function Library.CreateWindow(opts)
 			end
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				local d = input.Position - dragStart
+				root:SetAttribute("Moved", true)
 				root.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
 			end
 		end))
@@ -785,7 +927,17 @@ function Library.CreateWindow(opts)
 			return
 		end
 		if input.KeyCode == toggleKey then
-			root.Visible = not root.Visible
+			window:Toggle()
+		end
+	end))
+
+	bind(UserInputService.InputChanged:Connect(function(input)
+		if not window._open then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local loc = UserInputService:GetMouseLocation()
+			menuCursor.Position = UDim2.fromOffset(loc.X, loc.Y)
 		end
 	end))
 
@@ -793,16 +945,144 @@ function Library.CreateWindow(opts)
 		if opts.OnClose then
 			opts.OnClose()
 		else
-			window:Destroy()
+			window:SetOpen(false)
 		end
 	end)
 
-	-- entrance
-	do
-		local target = root.Position
-		root.Position = UDim2.new(target.X.Scale, target.X.Offset, target.Y.Scale, target.Y.Offset + 18)
-		root.BackgroundTransparency = 0.2
-		tween(root, { Position = target, BackgroundTransparency = 0 }, 0.28)
+	-- keep mouse unlocked every frame while open (games scripts often re-lock)
+	pcall(function()
+		RunService:BindToRenderStep(unlockName, Enum.RenderPriority.Last.Value, applyMenuMouseState)
+	end)
+
+	local function playBootThenOpen()
+		local overlay = mk("Frame", {
+			Name = "Boot",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(6, 6, 10),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ZIndex = 400,
+		}, screen)
+		local card = mk("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromOffset(300, 176),
+			BackgroundColor3 = Theme.panel,
+			BorderSizePixel = 0,
+			BackgroundTransparency = 1,
+			ZIndex = 401,
+		}, overlay)
+		corner(card, 14)
+		local cardStroke = stroke(card, Theme.accent, 1, 1)
+		local cardScale = mk("UIScale", { Scale = 0.78 }, card)
+		mk("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 0),
+			Size = UDim2.new(1, 0, 0, 3),
+			BackgroundColor3 = Theme.accent,
+			BorderSizePixel = 0,
+			ZIndex = 402,
+		}, card)
+		local badge = mk("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 28),
+			Size = UDim2.fromOffset(42, 42),
+			BackgroundColor3 = Theme.accent,
+			BorderSizePixel = 0,
+			ZIndex = 402,
+		}, card)
+		corner(badge, 10)
+		mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Size = UDim2.fromScale(1, 1),
+			Font = Enum.Font.GothamBold,
+			TextSize = 16,
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			Text = string.upper(string.sub(brand, 1, 2)),
+			ZIndex = 403,
+		}, badge)
+		mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(16, 80),
+			Size = UDim2.new(1, -32, 0, 24),
+			Font = Enum.Font.GothamBold,
+			TextSize = 18,
+			TextColor3 = Theme.text,
+			Text = title,
+			ZIndex = 402,
+		}, card)
+		local bootSub = mk("TextLabel", {
+			BackgroundTransparency = 1,
+			Position = UDim2.fromOffset(16, 104),
+			Size = UDim2.new(1, -32, 0, 16),
+			Font = Enum.Font.Gotham,
+			TextSize = 11,
+			TextColor3 = Theme.textDim,
+			Text = "Loading",
+			ZIndex = 402,
+		}, card)
+		local track = mk("Frame", {
+			Position = UDim2.fromOffset(28, 136),
+			Size = UDim2.new(1, -56, 0, 6),
+			BackgroundColor3 = Theme.stroke,
+			BorderSizePixel = 0,
+			ZIndex = 402,
+		}, card)
+		corner(track, 3)
+		local fill = mk("Frame", {
+			Size = UDim2.new(0, 0, 1, 0),
+			BackgroundColor3 = Theme.accent,
+			BorderSizePixel = 0,
+			ZIndex = 403,
+		}, track)
+		corner(fill, 3)
+
+		TweenService:Create(overlay, TweenInfo.new(0.28), { BackgroundTransparency = 0.22 }):Play()
+		TweenService:Create(card, TweenInfo.new(0.28), { BackgroundTransparency = 0 }):Play()
+		TweenService:Create(cardStroke, TweenInfo.new(0.28), { Transparency = 0.25 }):Play()
+		TweenService:Create(
+			cardScale,
+			TweenInfo.new(0.48, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+			{ Scale = 1 }
+		):Play()
+		TweenService:Create(
+			fill,
+			TweenInfo.new(0.9, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+			{ Size = UDim2.new(1, 0, 1, 0) }
+		):Play()
+		task.wait(0.42)
+		if bootSub.Parent then
+			bootSub.Text = "Ready"
+		end
+		task.wait(0.7)
+		TweenService:Create(
+			overlay,
+			TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{ BackgroundTransparency = 1 }
+		):Play()
+		TweenService:Create(
+			card,
+			TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{ BackgroundTransparency = 1 }
+		):Play()
+		TweenService:Create(
+			cardScale,
+			TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{ Scale = 1.08 }
+		):Play()
+		task.wait(0.28)
+		if overlay.Parent then
+			overlay:Destroy()
+		end
+		if window._alive then
+			window:SetOpen(true)
+		end
+	end
+
+	if showBoot then
+		task.spawn(playBootThenOpen)
+	elseif opts.StartOpen ~= false then
+		window:SetOpen(true)
 	end
 
 	table.insert(Library.Windows, window)

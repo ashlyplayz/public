@@ -1,13 +1,8 @@
 --[[
-	PL UI Library — loadable window kit (sidebar + cards)
-	Save as: PLUILib.lua  (executor workspace, next to PLQTEAssist.lua)
-
-	Usage:
-		local PLUI = loadstring(readfile("PLUILib.lua"))()
-		local win = PLUI.CreateWindow({ Title = "PL Assist", Brand = "PL" })
-		local tab = win:AddTab("Combat")
-		local left, right = tab:Columns()
-		left:Section("Combat"):Toggle({ Flag = "autoCombat", Text = "Auto Combat", Default = true, Callback = fn })
+	PL UI Library — Rivals-style sidebar + cards
+	Host as lib.lua and load with:
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/ashlyplayz/public/main/lib.lua"))()
+	Local fallback: PLUILib.lua in executor workspace.
 ]]
 
 local Players = game:GetService("Players")
@@ -16,22 +11,23 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
+-- Palette aligned with Rivals Assist hub
 local Theme = {
-	bg = Color3.fromRGB(16, 18, 24),
-	panel = Color3.fromRGB(24, 28, 36),
-	panelAlt = Color3.fromRGB(32, 38, 48),
-	sidebar = Color3.fromRGB(20, 23, 30),
-	stroke = Color3.fromRGB(48, 56, 68),
-	accent = Color3.fromRGB(209, 184, 124), -- gold
-	accentDim = Color3.fromRGB(140, 118, 72),
+	bg = Color3.fromRGB(16, 16, 20),
+	panel = Color3.fromRGB(24, 24, 31),
+	panelAlt = Color3.fromRGB(30, 30, 38),
+	sidebar = Color3.fromRGB(24, 24, 31),
+	stroke = Color3.fromRGB(48, 48, 62),
+	accent = Color3.fromRGB(99, 102, 241),
+	accentDim = Color3.fromRGB(79, 82, 200),
 	mint = Color3.fromRGB(150, 226, 140),
 	cyan = Color3.fromRGB(153, 204, 216),
 	rose = Color3.fromRGB(207, 142, 132),
-	text = Color3.fromRGB(236, 232, 220),
-	textDim = Color3.fromRGB(140, 148, 158),
-	off = Color3.fromRGB(58, 64, 74),
-	tabIdle = Color3.fromRGB(30, 35, 44),
-	tabHover = Color3.fromRGB(38, 44, 56),
+	text = Color3.fromRGB(236, 236, 244),
+	textDim = Color3.fromRGB(148, 150, 168),
+	off = Color3.fromRGB(58, 58, 70),
+	tabIdle = Color3.fromRGB(30, 30, 38),
+	tabHover = Color3.fromRGB(38, 38, 50),
 }
 
 local function parentGui()
@@ -380,7 +376,7 @@ function Library.CreateWindow(opts)
 	local title = tostring(opts.Title or "Window")
 	local brand = tostring(opts.Brand or string.sub(title, 1, 2))
 	local subtitle = tostring(opts.Subtitle or "Ready")
-	local size = opts.Size or UDim2.fromOffset(620, 430)
+	local size = opts.Size or UDim2.fromOffset(640, 540)
 	local toggleKey = opts.ToggleKey or Enum.KeyCode.RightShift
 
 	local connections = {}
@@ -406,54 +402,56 @@ function Library.CreateWindow(opts)
 		Size = size,
 		ClipsDescendants = true,
 	}, screen)
-	corner(root, 16)
-	stroke(root, Theme.accentDim, 1.2, 0.4)
+	corner(root, 8)
+	stroke(root, Theme.stroke, 1, 0.15)
+	mk("Frame", {
+		Name = "Accent",
+		BackgroundColor3 = Theme.accent,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 2),
+		ZIndex = 5,
+	}, root)
 
 	-- header
 	local header = mk("Frame", {
 		BackgroundColor3 = Theme.panel,
 		BorderSizePixel = 0,
-		Size = UDim2.new(1, 0, 0, 58),
+		Position = UDim2.fromOffset(0, 2),
+		Size = UDim2.new(1, 0, 0, 46),
 	}, root)
-	mk("UIGradient", {
-		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(34, 38, 48)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 20, 26)),
-		}),
-		Rotation = 90,
-	}, header)
+	corner(header, 8)
 
 	local brandBadge = mk("Frame", {
 		BackgroundColor3 = Theme.accent,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(14, 14),
-		Size = UDim2.fromOffset(30, 30),
+		Position = UDim2.fromOffset(10, 9),
+		Size = UDim2.fromOffset(28, 28),
 	}, header)
-	corner(brandBadge, 8)
+	corner(brandBadge, 6)
 	mk("TextLabel", {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromScale(1, 1),
 		Font = Enum.Font.GothamBold,
 		Text = string.upper(string.sub(brand, 1, 2)),
-		TextColor3 = Color3.fromRGB(20, 18, 14),
-		TextSize = 13,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		TextSize = 12,
 	}, brandBadge)
 
 	mk("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(54, 12),
-		Size = UDim2.new(1, -110, 0, 20),
+		Position = UDim2.fromOffset(46, 6),
+		Size = UDim2.new(0.5, 0, 0, 18),
 		Font = Enum.Font.GothamBold,
 		Text = title,
 		TextColor3 = Theme.text,
-		TextSize = 16,
+		TextSize = 15,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	}, header)
 
 	local subtitleLabel = mk("TextLabel", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(54, 32),
-		Size = UDim2.new(1, -110, 0, 16),
+		Position = UDim2.fromOffset(46, 24),
+		Size = UDim2.new(0.5, 0, 0, 14),
 		Font = Enum.Font.Gotham,
 		Text = subtitle,
 		TextColor3 = Theme.textDim,
@@ -466,32 +464,34 @@ function Library.CreateWindow(opts)
 		BackgroundColor3 = Theme.panelAlt,
 		BorderSizePixel = 0,
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -14, 0.5, 0),
+		Position = UDim2.new(1, -10, 0.5, 0),
 		Size = UDim2.fromOffset(28, 28),
 		Font = Enum.Font.GothamBold,
 		Text = "×",
 		TextColor3 = Theme.text,
-		TextSize = 16,
+		TextSize = 14,
 	}, header)
-	corner(closeBtn, 8)
+	corner(closeBtn, 5)
 
 	-- body: sidebar + content
 	local body = mk("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0, 58),
-		Size = UDim2.new(1, 0, 1, -86),
+		Position = UDim2.fromOffset(8, 52),
+		Size = UDim2.new(1, -16, 1, -82),
 	}, root)
 
 	local sidebar = mk("ScrollingFrame", {
 		BackgroundColor3 = Theme.sidebar,
 		BorderSizePixel = 0,
-		Size = UDim2.new(0, 118, 1, 0),
+		Size = UDim2.new(0, 128, 1, 0),
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 2,
 		ScrollBarImageColor3 = Theme.accentDim,
 	}, body)
-	pad(sidebar, 10, 10, 10, 10)
+	corner(sidebar, 6)
+	stroke(sidebar, Theme.stroke, 1, 0.2)
+	pad(sidebar, 8, 8, 8, 8)
 	mk("UIListLayout", {
 		Padding = UDim.new(0, 6),
 		SortOrder = Enum.SortOrder.LayoutOrder,
@@ -499,8 +499,8 @@ function Library.CreateWindow(opts)
 
 	local content = mk("Frame", {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(118, 0),
-		Size = UDim2.new(1, -118, 1, 0),
+		Position = UDim2.fromOffset(136, 0),
+		Size = UDim2.new(1, -136, 1, 0),
 	}, body)
 
 	local contentHeader = mk("Frame", {
@@ -625,7 +625,7 @@ function Library.CreateWindow(opts)
 			local on = n == name
 			tabApi.Page.Visible = on
 			tabApi.Button.BackgroundColor3 = on and Theme.accent or Theme.tabIdle
-			tabApi.Button.TextColor3 = on and Color3.fromRGB(24, 20, 14) or Theme.text
+			tabApi.Button.TextColor3 = Color3.fromRGB(255, 255, 255)
 		end
 		window._active = name
 		pageTitle.Text = name

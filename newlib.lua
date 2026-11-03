@@ -9,26 +9,42 @@ local RunService = game:GetService("RunService")
 local ContextActionService = game:GetService("ContextActionService")
 local LocalPlayer = Players.LocalPlayer
 
--- Dark purple
+-- Dark purple (clean, no neon wash)
 local Theme = {
- bg = Color3.fromRGB(12, 10, 18),
- panel = Color3.fromRGB(18, 14, 26),
- panelAlt = Color3.fromRGB(28, 22, 40),
- sidebar = Color3.fromRGB(10, 8, 16),
- stroke = Color3.fromRGB(52, 40, 72),
+ bg = Color3.fromRGB(14, 12, 20),
+ panel = Color3.fromRGB(20, 16, 28),
+ panelAlt = Color3.fromRGB(30, 24, 42),
+ sidebar = Color3.fromRGB(12, 10, 18),
+ stroke = Color3.fromRGB(48, 40, 64),
  accent = Color3.fromRGB(168, 85, 247),
  accentDim = Color3.fromRGB(126, 58, 196),
  mint = Color3.fromRGB(52, 211, 153),
  cyan = Color3.fromRGB(196, 181, 253),
  rose = Color3.fromRGB(248, 113, 113),
- text = Color3.fromRGB(244, 240, 255),
- textDim = Color3.fromRGB(156, 148, 176),
+ text = Color3.fromRGB(246, 242, 255),
+ textDim = Color3.fromRGB(150, 142, 168),
  off = Color3.fromRGB(42, 34, 56),
- tabIdle = Color3.fromRGB(10, 8, 16),
- tabHover = Color3.fromRGB(32, 24, 48),
+ tabIdle = Color3.fromRGB(12, 10, 18),
+ tabHover = Color3.fromRGB(34, 26, 50),
 }
 
 local function parentGui()
+ -- prefer executor hide GUI so the hub survives PlayerGui resets
+ local ok, hui = pcall(function()
+  if typeof(gethui) == "function" then
+   return gethui()
+  end
+  return nil
+ end)
+ if ok and hui then
+  return hui
+ end
+ local ok2, core = pcall(function()
+  return game:GetService("CoreGui")
+ end)
+ if ok2 and core then
+  return core
+ end
  return LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui")
 end
 
@@ -111,7 +127,7 @@ local function makeBrand(parent, size, z)
   mk("TextLabel", {
    BackgroundTransparency = 1,
    Size = UDim2.fromScale(1, 1),
-   Font = Enum.Font.GothamBold,
+   Font = Enum.Font.Code,
    Text = "M",
    TextColor3 = Color3.fromRGB(16, 14, 12),
    TextSize = math.max(12, math.floor(size * 0.48)),
@@ -187,13 +203,15 @@ local function makeSection(host, title)
  AutomaticSize = Enum.AutomaticSize.Y,
  }, host)
  corner(card, 14)
- local cardStroke = stroke(card, Theme.stroke, 1, 0.42)
+ -- quiet border; no hover glow (was reading as a purple back-halo)
+ local cardStroke = stroke(card, Theme.stroke, 1, 0.62)
  pad(card, 12, 12, 12, 12)
  card.MouseEnter:Connect(function()
- tween(cardStroke, { Color = Theme.accent, Transparency = 0.18 }, 0.18)
+  tween(card, { BackgroundColor3 = Theme.panelAlt }, 0.14)
  end)
  card.MouseLeave:Connect(function()
- tween(cardStroke, { Color = Theme.stroke, Transparency = 0.42 }, 0.22)
+  tween(card, { BackgroundColor3 = Theme.panel }, 0.18)
+  tween(cardStroke, { Color = Theme.stroke, Transparency = 0.62 }, 0.18)
  end)
 
  local list = mk("UIListLayout", {
@@ -219,7 +237,7 @@ local function makeSection(host, title)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(10, 0),
  Size = UDim2.new(1, -10, 1, 0),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = title or "Section",
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -251,7 +269,7 @@ local function makeSection(host, title)
  BackgroundTransparency = 1,
  Size = UDim2.new(1, 0, 0, 0),
  AutomaticSize = Enum.AutomaticSize.Y,
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = tostring(text or ""),
  TextColor3 = Theme.textDim,
  TextSize = 11,
@@ -275,7 +293,7 @@ local function makeSection(host, title)
  mk("TextLabel", {
  BackgroundTransparency = 1,
  Size = UDim2.new(1, -52, 1, 0),
- Font = Enum.Font.GothamMedium,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Text or "Toggle"),
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -291,7 +309,7 @@ local function makeSection(host, title)
  AnchorPoint = Vector2.new(1, 0.5),
  Position = UDim2.new(1, 0, 0.5, 0),
  Size = UDim2.fromOffset(20, 20),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = on and "✓" or "",
  TextColor3 = Color3.fromRGB(255, 255, 255),
  TextSize = 12,
@@ -330,7 +348,7 @@ local function makeSection(host, title)
  BackgroundColor3 = Theme.panelAlt,
  BorderSizePixel = 0,
  Size = UDim2.new(1, 0, 0, 32),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Text or "Button"),
  TextColor3 = opts.Danger and Theme.rose or Theme.accent,
  TextSize = 12,
@@ -370,7 +388,7 @@ local function makeSection(host, title)
  local title = mk("TextLabel", {
  BackgroundTransparency = 1,
  Size = UDim2.new(1, -48, 0, 16),
- Font = Enum.Font.GothamMedium,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Text or "Slider"),
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -381,7 +399,7 @@ local function makeSection(host, title)
  AnchorPoint = Vector2.new(1, 0),
  Position = UDim2.new(1, 0, 0, 0),
  Size = UDim2.fromOffset(48, 16),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = string.format(opts.Format or "%.2f", value),
  TextColor3 = Theme.accent,
  TextSize = 12,
@@ -482,7 +500,7 @@ local function makeSection(host, title)
  mk("TextLabel", {
  BackgroundTransparency = 1,
  Size = UDim2.new(1, 0, 0, 16),
- Font = Enum.Font.GothamMedium,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Text or "Value"),
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -493,7 +511,7 @@ local function makeSection(host, title)
  BorderSizePixel = 0,
  Position = UDim2.fromOffset(0, 20),
  Size = UDim2.new(1, 0, 0, 28),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Default or ""),
  PlaceholderText = tostring(opts.Placeholder or ""),
  PlaceholderColor3 = Theme.textDim,
@@ -545,7 +563,7 @@ local function makeSection(host, title)
  mk("TextLabel", {
  BackgroundTransparency = 1,
  Size = UDim2.new(1, -92, 1, 0),
- Font = Enum.Font.GothamMedium,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Text or "Keybind"),
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -558,7 +576,7 @@ local function makeSection(host, title)
  AnchorPoint = Vector2.new(1, 0.5),
  Position = UDim2.new(1, 0, 0.5, 0),
  Size = UDim2.fromOffset(86, 26),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = current.Name,
  TextColor3 = Theme.text,
  TextSize = 11,
@@ -646,7 +664,7 @@ local function makeSection(host, title)
  mk("TextLabel", {
  BackgroundTransparency = 1,
  Size = UDim2.new(1, -28, 1, 0),
- Font = Enum.Font.GothamMedium,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Text or "Color"),
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -667,7 +685,7 @@ local function makeSection(host, title)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(0, 22),
  Size = UDim2.new(1, 0, 0, 14),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = currentName,
  TextColor3 = Theme.textDim,
  TextSize = 10,
@@ -792,7 +810,7 @@ local function makeSection(host, title)
  mk("TextLabel", {
  BackgroundTransparency = 1,
  Size = UDim2.new(1, 0, 0, 16),
- Font = Enum.Font.GothamMedium,
+ Font = Enum.Font.Code,
  Text = tostring(opts.Text or "Select"),
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -815,7 +833,7 @@ local function makeSection(host, title)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(10, 0),
  Size = UDim2.new(1, -28, 1, 0),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = value,
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -829,7 +847,7 @@ local function makeSection(host, title)
  AnchorPoint = Vector2.new(1, 0.5),
  Position = UDim2.new(1, -8, 0.5, 0),
  Size = UDim2.fromOffset(14, 14),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "v",
  TextColor3 = Theme.textDim,
  TextSize = 11,
@@ -951,7 +969,7 @@ local function makeSection(host, title)
  BackgroundColor3 = Theme.panelAlt,
  BorderSizePixel = 0,
  Size = UDim2.new(1, 0, 0, 26),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = "  " .. opt,
  TextColor3 = Theme.textDim,
  TextSize = 12,
@@ -1090,10 +1108,16 @@ function Library.CreateWindow(opts)
  Size = size,
  ClipsDescendants = true,
  Visible = false,
+ Active = true,
  ZIndex = 10,
  }, screen)
  corner(root, 12)
- stroke(root, Theme.stroke, 1, 0.2)
+ -- optional thin border only — no outer glow/halo
+ if opts.WindowGlow == true then
+  stroke(root, Theme.accent, 2, 0.35)
+ elseif opts.WindowStroke ~= false then
+  stroke(root, Theme.stroke, 1, 0.55)
+ end
  local openScale = mk("UIScale", { Name = "OpenScale", Scale = 1 }, root)
 
  -- hint chip (visible while menu closed)
@@ -1104,7 +1128,7 @@ function Library.CreateWindow(opts)
  AnchorPoint = Vector2.new(1, 0),
  Position = UDim2.new(1, -14, 0, 14),
  Size = UDim2.fromOffset(168, 26),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  TextSize = 11,
  TextColor3 = Theme.text,
  ZIndex = 5,
@@ -1157,7 +1181,7 @@ function Library.CreateWindow(opts)
  BorderSizePixel = 0,
  Position = UDim2.fromOffset(20, 10),
  Size = UDim2.fromOffset(54, 18),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "SPEC",
  TextColor3 = Color3.fromRGB(255, 255, 255),
  TextSize = 10,
@@ -1170,7 +1194,7 @@ function Library.CreateWindow(opts)
  AnchorPoint = Vector2.new(1, 0),
  Position = UDim2.new(1, -12, 0, 10),
  Size = UDim2.fromOffset(64, 18),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "0",
  TextColor3 = Theme.text,
  TextSize = 10,
@@ -1181,7 +1205,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(20, 32),
  Size = UDim2.new(1, -32, 0, 18),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "",
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -1193,7 +1217,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(20, 48),
  Size = UDim2.new(1, -32, 0, 0),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = "",
  TextColor3 = Theme.textDim,
  TextSize = 11,
@@ -1244,7 +1268,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(48, 4),
  Size = UDim2.new(1, -128, 0, 22),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = title,
  TextColor3 = Theme.text,
  TextSize = 14,
@@ -1257,7 +1281,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(48, 24),
  Size = UDim2.new(1, -128, 0, 14),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = subtitle,
  TextColor3 = Theme.textDim,
  TextSize = 11,
@@ -1273,7 +1297,7 @@ function Library.CreateWindow(opts)
  AnchorPoint = Vector2.new(1, 0.5),
  Position = UDim2.new(1, -8, 0.5, 0),
  Size = UDim2.fromOffset(28, 28),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "×",
  TextColor3 = Theme.textDim,
  TextSize = 16,
@@ -1286,7 +1310,7 @@ function Library.CreateWindow(opts)
  AnchorPoint = Vector2.new(1, 0.5),
  Position = UDim2.new(1, -36, 0.5, 0),
  Size = UDim2.fromOffset(28, 28),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "–",
  TextColor3 = Theme.textDim,
  TextSize = 16,
@@ -1390,7 +1414,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(54, 14),
  Size = UDim2.new(1, -64, 0, 18),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = profileName,
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -1402,7 +1426,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(54, 32),
  Size = UDim2.new(1, -64, 0, 16),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = "@" .. tostring(LocalPlayer.Name),
  TextColor3 = Theme.textDim,
  TextSize = 10,
@@ -1424,7 +1448,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(12, 8),
  Size = UDim2.new(0.55, 0, 0, 18),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "",
  TextColor3 = Theme.text,
  TextSize = 13,
@@ -1439,7 +1463,7 @@ function Library.CreateWindow(opts)
  AnchorPoint = Vector2.new(1, 0),
  Position = UDim2.new(1, -10, 0, 6),
  Size = UDim2.fromOffset(158, 24),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  PlaceholderText = "Search",
  PlaceholderColor3 = Theme.textDim,
  Text = "",
@@ -1489,7 +1513,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(12, 0),
  Size = UDim2.new(0.55, 0, 1, 0),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = "Ready",
  TextColor3 = Theme.textDim,
  TextSize = 10,
@@ -1500,7 +1524,7 @@ function Library.CreateWindow(opts)
  AnchorPoint = Vector2.new(1, 0),
  Position = UDim2.new(1, -12, 0, 0),
  Size = UDim2.new(0.42, 0, 1, 0),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  Text = "",
  TextColor3 = Theme.cyan,
  TextSize = 10,
@@ -1607,7 +1631,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Size = UDim2.new(1, 0, 0, 0),
  AutomaticSize = Enum.AutomaticSize.Y,
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  Text = text,
  TextColor3 = Theme.text,
  TextSize = 12,
@@ -1694,7 +1718,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  BorderSizePixel = 0,
  Size = UDim2.new(1, 0, 0, 32),
- Font = Enum.Font.GothamMedium,
+ Font = Enum.Font.Code,
  Text = "  " .. name,
  TextColor3 = Theme.textDim,
  TextSize = 13,
@@ -1840,23 +1864,46 @@ function Library.CreateWindow(opts)
  pcall(function()
  RunService:UnbindFromRenderStep(mouseUnlockName)
  end)
+ -- restore game mouse; never leave Modal / locked overlay behind
+ pcall(function()
+  if window._savedMouseBehavior ~= nil then
+   UserInputService.MouseBehavior = window._savedMouseBehavior
+  end
+  if window._savedMouseIcon ~= nil then
+   UserInputService.MouseIconEnabled = window._savedMouseIcon
+  end
+  window._savedMouseBehavior = nil
+  window._savedMouseIcon = nil
+ end)
  end
 
  local function startMouseUnlock()
- stopMouseUnlock()
+ pcall(function()
+  RunService:UnbindFromRenderStep(mouseUnlockName)
+ end)
  if not mouseUnlockEnabled() then
  return
  end
+ -- free cursor for UI clicks, but do not Modal-sink the whole game
  pcall(function()
- UserInputService.MouseBehavior = Enum.MouseBehavior.Default
- UserInputService.MouseIconEnabled = true
+  if window._savedMouseBehavior == nil then
+   window._savedMouseBehavior = UserInputService.MouseBehavior
+   window._savedMouseIcon = UserInputService.MouseIconEnabled
+  end
+  UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+  UserInputService.MouseIconEnabled = true
  end)
+ -- only re-assert when something else re-locks the cursor (don't fight every frame)
  RunService:BindToRenderStep(mouseUnlockName, Enum.RenderPriority.Last.Value, function()
  if not window._alive or not window._open then
  return
  end
- UserInputService.MouseBehavior = Enum.MouseBehavior.Default
- UserInputService.MouseIconEnabled = true
+ if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+  UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+ end
+ if not UserInputService.MouseIconEnabled then
+  UserInputService.MouseIconEnabled = true
+ end
  end)
  end
 
@@ -2005,6 +2052,71 @@ function Library.CreateWindow(opts)
  end))
  end
 
+ -- resize grip (bottom-right)
+ if opts.Resizable ~= false then
+  local minW = tonumber(opts.MinWidth) or 420
+  local minH = tonumber(opts.MinHeight) or 320
+  local maxW = tonumber(opts.MaxWidth) or 1100
+  local maxH = tonumber(opts.MaxHeight) or 800
+  local grip = mk("TextButton", {
+   Name = "ResizeGrip",
+   AutoButtonColor = false,
+   BackgroundTransparency = 1,
+   BorderSizePixel = 0,
+   AnchorPoint = Vector2.new(1, 1),
+   Position = UDim2.new(1, -2, 1, -2),
+   Size = UDim2.fromOffset(18, 18),
+   Text = "",
+   ZIndex = 80,
+  }, root)
+  -- grip ticks
+  for i = 0, 2 do
+   mk("Frame", {
+    BackgroundColor3 = Theme.textDim,
+    BackgroundTransparency = 0.35,
+    BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(1, 1),
+    Position = UDim2.new(1, -3 - i * 4, 1, -3),
+    Size = UDim2.fromOffset(10 - i * 2, 2),
+    Rotation = -45,
+    ZIndex = 81,
+   }, grip)
+  end
+  local resizing = false
+  local resizeStart = Vector2.zero
+  local startSize = Vector2.zero
+  grip.InputBegan:Connect(function(input)
+   if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    resizing = true
+    resizeStart = UserInputService:GetMouseLocation()
+    startSize = Vector2.new(root.AbsoluteSize.X, root.AbsoluteSize.Y)
+   end
+  end)
+  bind(UserInputService.InputEnded:Connect(function(input)
+   if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    resizing = false
+   end
+  end))
+  bind(RunService.RenderStepped:Connect(function()
+   if not resizing or not window._open then
+    return
+   end
+   local m = UserInputService:GetMouseLocation()
+   local d = m - resizeStart
+   local w = math.clamp(startSize.X + d.X, minW, maxW)
+   local h = math.clamp(startSize.Y + d.Y, minH, maxH)
+   root.Size = UDim2.fromOffset(math.floor(w + 0.5), math.floor(h + 0.5))
+  end))
+  function window:SetSize(w, h)
+   w = math.clamp(tonumber(w) or root.AbsoluteSize.X, minW, maxW)
+   h = math.clamp(tonumber(h) or root.AbsoluteSize.Y, minH, maxH)
+   root.Size = UDim2.fromOffset(w, h)
+  end
+  function window:GetSize()
+   return root.AbsoluteSize.X, root.AbsoluteSize.Y
+  end
+ end
+
  local lastToggleAt = 0
  local function isToggleKey(code)
  for _, key in ipairs(toggleKeys) do
@@ -2046,7 +2158,8 @@ function Library.CreateWindow(opts)
  if state == Enum.UserInputState.Begin then
  handleTogglePress()
  end
- return Enum.ContextActionResult.Sink
+ -- Pass so the key is not eaten from the game
+ return Enum.ContextActionResult.Pass
  end,
  false,
  4000,
@@ -2118,7 +2231,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(16, 80),
  Size = UDim2.new(1, -32, 0, 24),
- Font = Enum.Font.GothamBold,
+ Font = Enum.Font.Code,
  TextSize = 18,
  TextColor3 = Theme.text,
  Text = title,
@@ -2128,7 +2241,7 @@ function Library.CreateWindow(opts)
  BackgroundTransparency = 1,
  Position = UDim2.fromOffset(16, 104),
  Size = UDim2.new(1, -32, 0, 16),
- Font = Enum.Font.Gotham,
+ Font = Enum.Font.Code,
  TextSize = 11,
  TextColor3 = Theme.textDim,
  Text = "Loading...",

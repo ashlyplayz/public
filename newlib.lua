@@ -225,56 +225,149 @@ function Library.SetTheme(patch)
  end
 end
 
-local function makeSection(host, title, bindFlag)
+local function makeSection(host, title, ctx, style)
+ ctx = ctx or {}
+ style = style or {}
+ local bindFlag = ctx.BindFlag
+ if type(ctx) == "function" then
+  bindFlag = ctx
+  ctx = { BindFlag = bindFlag }
+ end
+ local flat = style.Flat == true
  local card = mk("Frame", {
- BackgroundColor3 = Theme.panel,
+ BackgroundColor3 = flat and Theme.bg or Theme.panel,
+ BackgroundTransparency = flat and 1 or 0,
  BorderSizePixel = 0,
  Size = UDim2.new(1, 0, 0, 0),
  AutomaticSize = Enum.AutomaticSize.Y,
  }, host)
- corner(card, 10)
- -- quiet border; no hover glow
- local cardStroke = stroke(card, Theme.stroke, 1, 0.5)
- pad(card, 18, 18, 18, 18)
- card.MouseEnter:Connect(function()
-  tween(cardStroke, { Color = Theme.accentDim, Transparency = 0.35 }, 0.16)
- end)
- card.MouseLeave:Connect(function()
-  tween(cardStroke, { Color = Theme.stroke, Transparency = 0.55 }, 0.2)
- end)
+ if not flat then
+  corner(card, 10)
+  local cardStroke = stroke(card, Theme.stroke, 1, 0.5)
+  pad(card, 18, 18, 18, 18)
+  card.MouseEnter:Connect(function()
+   tween(cardStroke, { Color = Theme.accentDim, Transparency = 0.35 }, 0.16)
+  end)
+  card.MouseLeave:Connect(function()
+   tween(cardStroke, { Color = Theme.stroke, Transparency = 0.55 }, 0.2)
+  end)
+ else
+  pad(card, style.PadTop or 4, style.PadBottom or 8, style.PadLeft or 0, style.PadRight or 0)
+ end
 
  local list = mk("UIListLayout", {
  Padding = UDim.new(0, 14),
  SortOrder = Enum.SortOrder.LayoutOrder,
  }, card)
 
- local head = mk("Frame", {
- BackgroundTransparency = 1,
- Size = UDim2.new(1, 0, 0, 24),
- LayoutOrder = 0,
- }, card)
+ if not flat and title and title ~= "" then
+  local head = mk("Frame", {
+   BackgroundTransparency = 1,
+   Size = UDim2.new(1, 0, 0, 24),
+   LayoutOrder = 0,
+  }, card)
 
- local accentBar = mk("Frame", {
- BackgroundColor3 = Theme.accent,
- BorderSizePixel = 0,
- Size = UDim2.fromOffset(3, 16),
- Position = UDim2.fromOffset(0, 3),
- }, head)
- corner(accentBar, 2)
+  local accentBar = mk("Frame", {
+   BackgroundColor3 = Theme.accent,
+   BorderSizePixel = 0,
+   Size = UDim2.fromOffset(3, 16),
+   Position = UDim2.fromOffset(0, 3),
+  }, head)
+  corner(accentBar, 2)
 
- mk("TextLabel", {
- BackgroundTransparency = 1,
- Position = UDim2.fromOffset(12, 0),
- Size = UDim2.new(1, -12, 1, 0),
- Font = Enum.Font.GothamBold,
- Text = title or "Section",
- TextColor3 = Theme.text,
- TextSize = 14,
- TextXAlignment = Enum.TextXAlignment.Left,
- }, head)
+  mk("TextLabel", {
+   BackgroundTransparency = 1,
+   Position = UDim2.fromOffset(12, 0),
+   Size = UDim2.new(1, -12, 1, 0),
+   Font = Enum.Font.GothamBold,
+   Text = title or "Section",
+   TextColor3 = Theme.text,
+   TextSize = 14,
+   TextXAlignment = Enum.TextXAlignment.Left,
+  }, head)
+ end
 
  local order = 0
  local api = { Instance = card, _items = {} }
+ local function openSettings(settingsOpts, anchor)
+  if ctx.OpenSettings then
+   ctx.OpenSettings(settingsOpts, anchor)
+  end
+ end
+
+ local function attachSettings(row, ctrl, settings)
+  if type(settings) ~= "table" or type(settings.Build) ~= "function" then
+   return 0
+  end
+  -- layout from right: [gear][swatch?][gap][checkbox]
+  local hasColor = settings.Color ~= nil or type(settings.GetColor) == "function"
+  local swatchRight = 30 -- left of 22px checkbox + 8px gap
+  local gearRight = hasColor and 54 or 30 -- left of swatch or checkbox
+
+  local gear = mk("TextButton", {
+   AutoButtonColor = false,
+   BackgroundTransparency = 1,
+   BorderSizePixel = 0,
+   AnchorPoint = Vector2.new(1, 0.5),
+   Position = UDim2.new(1, -gearRight, 0.5, 0),
+   Size = UDim2.fromOffset(20, 20),
+   Font = Enum.Font.GothamBold,
+   Text = "⚙",
+   TextColor3 = Theme.textDim,
+   TextSize = 13,
+   ZIndex = 5,
+  }, row)
+  hoverScale(gear, 1.12)
+  gear.MouseEnter:Connect(function()
+   tween(gear, { TextColor3 = Theme.accent }, 0.12)
+  end)
+  gear.MouseLeave:Connect(function()
+   tween(gear, { TextColor3 = Theme.textDim }, 0.16)
+  end)
+
+  local swatch
+  if hasColor then
+   local initial = settings.Color
+   if type(settings.GetColor) == "function" then
+    local ok, c = pcall(settings.GetColor)
+    if ok and typeof(c) == "Color3" then
+     initial = c
+    end
+   end
+   if typeof(initial) ~= "Color3" then
+    initial = Theme.accent
+   end
+   swatch = mk("TextButton", {
+    AutoButtonColor = false,
+    BackgroundColor3 = initial,
+    BorderSizePixel = 0,
+    AnchorPoint = Vector2.new(1, 0.5),
+    Position = UDim2.new(1, -swatchRight, 0.5, 0),
+    Size = UDim2.fromOffset(16, 16),
+    Text = "",
+    ZIndex = 5,
+   }, row)
+   corner(swatch, 4)
+   stroke(swatch, Color3.fromRGB(255, 255, 255), 1, 0.55)
+   hoverScale(swatch, 1.1)
+   function ctrl:SetPreviewColor(c)
+    if typeof(c) == "Color3" and swatch then
+     tween(swatch, { BackgroundColor3 = c }, 0.16)
+    end
+   end
+   swatch.MouseButton1Click:Connect(function()
+    pressPunch(swatch)
+    openSettings(settings, gear)
+   end)
+  end
+
+  gear.MouseButton1Click:Connect(function()
+   pressPunch(gear)
+   openSettings(settings, gear)
+  end)
+  -- extra width beyond the checkbox column
+  return hasColor and 50 or 28
+ end
 
  local function nextOrder()
  order += 1
@@ -327,9 +420,21 @@ local function makeSection(host, title, bindFlag)
  }, card)
  trackSearch(opts.Text, row)
 
+ local on = opts.Default == true
+ local accent = opts.Accent or Theme.accent
+ local ctrl = {
+ Flag = opts.Flag,
+ Get = function()
+ return on
+ end,
+ }
+
+ local settingsExtra = attachSettings(row, ctrl, opts.Settings)
+ local labelRight = 56 + settingsExtra
+
  mk("TextLabel", {
  BackgroundTransparency = 1,
- Size = UDim2.new(1, -56, 1, 0),
+ Size = UDim2.new(1, -labelRight, 1, 0),
  Font = Enum.Font.Gotham,
  Text = tostring(opts.Text or "Toggle"),
  TextColor3 = Theme.text,
@@ -337,8 +442,6 @@ local function makeSection(host, title, bindFlag)
  TextXAlignment = Enum.TextXAlignment.Left,
  }, row)
 
- local on = opts.Default == true
- local accent = opts.Accent or Theme.accent
  local box = mk("TextButton", {
  AutoButtonColor = false,
  BackgroundColor3 = on and accent or Theme.panelAlt,
@@ -350,16 +453,11 @@ local function makeSection(host, title, bindFlag)
  Text = on and "✓" or "",
  TextColor3 = Color3.fromRGB(255, 255, 255),
  TextSize = 13,
+ ZIndex = 5,
  }, row)
  corner(box, 6)
  local boxStroke = stroke(box, on and accent or Theme.stroke, 1, on and 0.1 or 0.35)
 
- local ctrl = {
- Flag = opts.Flag,
- Get = function()
- return on
- end,
- }
  function ctrl:Set(v, silent)
  on = v and true or false
  box.Text = on and "✓" or ""
@@ -1087,7 +1185,7 @@ function Library.CreateWindow(opts)
   title = "MythiOs"
  end
  local subtitle = tostring(opts.Subtitle or "")
- local size = opts.Size or UDim2.fromOffset(860, 580)
+ local size = opts.Size or UDim2.fromOffset(840, 560)
  local toggleKeys = {}
  local function addToggleKey(key)
  if typeof(key) == "string" then
@@ -1543,6 +1641,159 @@ function Library.CreateWindow(opts)
    end
   end
  end
+
+ local settingsHost = nil
+ local sectionCtx
+
+ function window:CloseSettings()
+  if settingsHost and settingsHost.Parent then
+   settingsHost:Destroy()
+  end
+  settingsHost = nil
+ end
+
+ function window:OpenSettings(settings, anchor)
+  settings = settings or {}
+  if type(settings.Build) ~= "function" then
+   return
+  end
+  self:CloseSettings()
+
+  local width = tonumber(settings.Width) or 280
+  local panelTitle = tostring(settings.Title or "Settings")
+  local holder = mk("Frame", {
+   Name = "SettingsPopup",
+   BackgroundColor3 = Theme.panel,
+   BorderSizePixel = 0,
+   Size = UDim2.fromOffset(width, 0),
+   AutomaticSize = Enum.AutomaticSize.Y,
+   ZIndex = 80,
+   Active = true,
+  }, screen)
+  corner(holder, 12)
+  stroke(holder, Theme.stroke, 1, 0.35)
+  local popScale = mk("UIScale", { Scale = 0.92 }, holder)
+
+  local header = mk("Frame", {
+   BackgroundTransparency = 1,
+   Size = UDim2.new(1, 0, 0, 36),
+   ZIndex = 81,
+  }, holder)
+  mk("TextLabel", {
+   BackgroundTransparency = 1,
+   Position = UDim2.fromOffset(14, 0),
+   Size = UDim2.new(1, -44, 1, 0),
+   Font = Enum.Font.GothamBold,
+   Text = panelTitle,
+   TextColor3 = Theme.text,
+   TextSize = 14,
+   TextXAlignment = Enum.TextXAlignment.Left,
+   ZIndex = 82,
+  }, header)
+  local closePop = mk("TextButton", {
+   AutoButtonColor = false,
+   BackgroundTransparency = 1,
+   AnchorPoint = Vector2.new(1, 0.5),
+   Position = UDim2.new(1, -8, 0.5, 0),
+   Size = UDim2.fromOffset(28, 28),
+   Font = Enum.Font.Gotham,
+   Text = "×",
+   TextColor3 = Theme.textDim,
+   TextSize = 16,
+   ZIndex = 82,
+  }, header)
+  closePop.MouseEnter:Connect(function()
+   tween(closePop, { TextColor3 = Theme.rose }, 0.12)
+  end)
+  closePop.MouseLeave:Connect(function()
+   tween(closePop, { TextColor3 = Theme.textDim }, 0.16)
+  end)
+  closePop.MouseButton1Click:Connect(function()
+   window:CloseSettings()
+  end)
+
+  mk("Frame", {
+   BackgroundColor3 = Theme.stroke,
+   BackgroundTransparency = 0.45,
+   BorderSizePixel = 0,
+   Position = UDim2.fromOffset(12, 36),
+   Size = UDim2.new(1, -24, 0, 1),
+   ZIndex = 81,
+  }, holder)
+
+  local body = mk("Frame", {
+   BackgroundTransparency = 1,
+   Position = UDim2.fromOffset(12, 44),
+   Size = UDim2.new(1, -24, 0, 0),
+   AutomaticSize = Enum.AutomaticSize.Y,
+   ZIndex = 81,
+  }, holder)
+  local bodySec = makeSection(body, "", sectionCtx, { Flat = true, PadTop = 4, PadBottom = 12 })
+  pcall(function()
+   settings.Build(bodySec)
+  end)
+
+  local function placePopup()
+   local gap = 12
+   local rootPos = root.AbsolutePosition
+   local rootSize = root.AbsoluteSize
+   local cam = workspace.CurrentCamera
+   local view = cam and cam.ViewportSize or Vector2.new(1280, 720)
+   local h = math.max(holder.AbsoluteSize.Y, 120)
+   local x = rootPos.X + rootSize.X + gap
+   local y = rootPos.Y + 48
+   if typeof(anchor) == "Instance" and anchor.AbsolutePosition then
+    y = anchor.AbsolutePosition.Y - 8
+   end
+   if x + width > view.X - 8 then
+    x = math.max(8, rootPos.X - width - gap)
+   end
+   if y + h > view.Y - 8 then
+    y = math.max(8, view.Y - h - 8)
+   end
+   if y < 8 then
+    y = 8
+   end
+   holder.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
+  end
+
+  settingsHost = holder
+  task.defer(placePopup)
+  holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(placePopup)
+  tween(popScale, { Scale = 1 }, 0.22, Enum.EasingStyle.Back)
+
+  -- drag header
+  local draggingPop = false
+  local dragStart, startPos
+  header.InputBegan:Connect(function(input)
+   if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    draggingPop = true
+    dragStart = input.Position
+    startPos = holder.Position
+   end
+  end)
+  UserInputService.InputChanged:Connect(function(input)
+   if not draggingPop then
+    return
+   end
+   if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+    local d = input.Position - dragStart
+    holder.Position = UDim2.fromOffset(startPos.X.Offset + d.X, startPos.Y.Offset + d.Y)
+   end
+  end)
+  UserInputService.InputEnded:Connect(function(input)
+   if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    draggingPop = false
+   end
+  end)
+ end
+
+ sectionCtx = {
+  BindFlag = window.BindFlag,
+  OpenSettings = function(settings, anchor)
+   window:OpenSettings(settings, anchor)
+  end,
+ }
 
  local function applySearch(query)
  for _, tabApi in pairs(window._tabs) do
@@ -2053,7 +2304,7 @@ function Library.CreateWindow(opts)
  }
 
  function tabApi:Section(title)
- local sec = makeSection(page, title, window.BindFlag)
+ local sec = makeSection(page, title, sectionCtx)
  sec.Instance.LayoutOrder = #self._sections + 1
  table.insert(self._sections, sec)
  return sec
@@ -2094,7 +2345,7 @@ function Library.CreateWindow(opts)
  local proxy = {
  _sections = tabApi._sections,
  Section = function(_, title)
- local sec = makeSection(holder, title, window.BindFlag)
+ local sec = makeSection(holder, title, sectionCtx)
  table.insert(tabApi._sections, sec)
  return sec
  end,
@@ -2268,6 +2519,7 @@ function Library.CreateWindow(opts)
  tween(hintLabel, { TextTransparency = 1, BackgroundTransparency = 1 }, 0.12)
  else
  stopMouseUnlock()
+ self:CloseSettings()
  applyClosedMouse()
  hintLabel.TextTransparency = 0
  hintLabel.BackgroundTransparency = 0.08
@@ -2288,6 +2540,7 @@ function Library.CreateWindow(opts)
  pcall(function()
  ContextActionService:UnbindAction(unlockName .. "_Toggle")
  end)
+ self:CloseSettings()
  applyClosedMouse()
  for _, c in ipairs(connections) do
  pcall(function()

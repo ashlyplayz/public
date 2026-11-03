@@ -7,7 +7,37 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local ContextActionService = game:GetService("ContextActionService")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
+
+local function sanitizeConfigName(name)
+ name = tostring(name or ""):lower():gsub("%s+", "_"):gsub("[^%w%-%_]", "")
+ name = string.sub(name, 1, 32)
+ if name == "" or name == "_meta" then
+  return "default"
+ end
+ return name
+end
+
+local function sanitizeFolderPart(name)
+ name = tostring(name or "ui"):gsub("[^%w%-%_]", "")
+ name = string.sub(name, 1, 48)
+ if name == "" then
+  return "ui"
+ end
+ return name
+end
+
+local function ensureFolders(path)
+ if type(makefolder) ~= "function" then
+  return
+ end
+ local built = ""
+ for part in string.gmatch(path, "[^/]+") do
+  built = built == "" and part or (built .. "/" .. part)
+  pcall(makefolder, built)
+ end
+end
 
 -- Dark purple (clean, no neon wash)
 local Theme = {
@@ -195,7 +225,7 @@ function Library.SetTheme(patch)
  end
 end
 
-local function makeSection(host, title)
+local function makeSection(host, title, bindFlag)
  local card = mk("Frame", {
  BackgroundColor3 = Theme.panel,
  BorderSizePixel = 0,
@@ -253,6 +283,14 @@ local function makeSection(host, title)
 
  local function trackSearch(text, root)
  table.insert(api._items, { text = string.lower(tostring(text or "")), root = root })
+ end
+
+ local function attachFlag(ctrl, flag)
+  if type(flag) == "string" and flag ~= "" and type(bindFlag) == "function" and type(ctrl) == "table" then
+   ctrl.Flag = flag
+   bindFlag(flag, ctrl)
+  end
+  return ctrl
  end
 
  function api:SetSearch(query)
@@ -337,7 +375,7 @@ local function makeSection(host, title)
  pressPunch(box)
  ctrl:Set(not on, false)
  end)
- return ctrl
+ return attachFlag(ctrl, opts.Flag)
  end
 
  function api:Button(opts)
@@ -481,7 +519,7 @@ local function makeSection(host, title)
  dragging = false
  end
  end)
- return ctrl
+ return attachFlag(ctrl, opts.Flag)
  end
 
  function api:Paragraph(text)
@@ -540,7 +578,7 @@ local function makeSection(host, title)
  opts.Callback(box.Text, enter)
  end
  end)
- return ctrl
+ return attachFlag(ctrl, opts.Flag)
  end
 
  function api:Keybind(opts)
@@ -628,7 +666,7 @@ local function makeSection(host, title)
  ctrl:Set(input.KeyCode, false)
  end)
  paint()
- return ctrl
+ return attachFlag(ctrl, opts.Flag)
  end
 
  function api:ColorPicker(opts)
@@ -746,7 +784,10 @@ local function makeSection(host, title)
  end
  end
  function ctrl:Get()
- return current, currentName
+ return current
+ end
+ function ctrl:GetName()
+ return currentName
  end
 
  for i, item in ipairs(presets) do
@@ -767,7 +808,7 @@ local function makeSection(host, title)
  end)
  end
  ctrl:Set(current, true, nearestName(current))
- return ctrl
+ return attachFlag(ctrl, opts.Flag)
  end
 
  function api:Dropdown(opts)
@@ -1033,7 +1074,7 @@ local function makeSection(host, title)
  end
  end)
 
- return ctrl
+ return attachFlag(ctrl, opts.Flag)
  end
 
  return api
@@ -1068,7 +1109,7 @@ function Library.CreateWindow(opts)
  end
  addToggleKey(opts.ToggleKey)
  if #toggleKeys == 0 then
- addToggleKey(Enum.KeyCode.RightShift)
+ addToggleKey(Enum.KeyCode.RightControl)
  end
  local showBoot = opts.Boot ~= false
  local unlockName = "PLUI_Toggle_" .. tostring(math.random(10000, 99999))
@@ -1459,6 +1500,15 @@ function Library.CreateWindow(opts)
  TextXAlignment = Enum.TextXAlignment.Right,
  }, footer)
 
+ local configId = sanitizeFolderPart(opts.ConfigId or opts.Name or title)
+ local placeKey = tostring(opts.PlaceId or game.PlaceId or 0)
+ local configRoot = string.format("MythiOs/configs/%s/%s", placeKey, configId)
+ local controls = {}
+ local configUi = {
+  selected = "default",
+  built = false,
+ }
+
  local window = {
  Screen = screen,
  Root = root,
@@ -1466,6 +1516,10 @@ function Library.CreateWindow(opts)
  _tabs = {},
  _active = nil,
  _flags = {},
+ _controls = controls,
+ _configRoot = configRoot,
+ _configId = configId,
+ _placeKey = placeKey,
  _searchables = {},
  _open = false,
  _savedMouseBehavior = nil,
@@ -1474,6 +1528,21 @@ function Library.CreateWindow(opts)
  _alive = true,
  Hint = hintLabel,
  }
+
+ function window.BindFlag(flag, ctrl)
+  if type(flag) ~= "string" or flag == "" or type(ctrl) ~= "table" then
+   return
+  end
+  controls[flag] = ctrl
+  if type(ctrl.Get) == "function" then
+   local ok, value = pcall(function()
+    return ctrl:Get()
+   end)
+   if ok then
+    window._flags[flag] = value
+   end
+  end
+ end
 
  local function applySearch(query)
  for _, tabApi in pairs(window._tabs) do
@@ -1602,10 +1671,298 @@ function Library.CreateWindow(opts)
 
  function window:SetFlag(flag, value)
  self._flags[flag] = value
+ local ctrl = controls[flag]
+ if ctrl and type(ctrl.Set) == "function" then
+  pcall(function()
+   ctrl:Set(value, false)
+  end)
+ end
  end
 
  function window:GetFlag(flag)
+ local ctrl = controls[flag]
+ if ctrl and type(ctrl.Get) == "function" then
+  local ok, value = pcall(function()
+   return ctrl:Get()
+  end)
+  if ok then
+   return value
+  end
+ end
  return self._flags[flag]
+ end
+
+ local function encodeValue(v)
+  local t = typeof(v)
+  if t == "Color3" then
+   return {
+    __t = "Color3",
+    r = math.floor(v.R * 255 + 0.5),
+    g = math.floor(v.G * 255 + 0.5),
+    b = math.floor(v.B * 255 + 0.5),
+   }
+  end
+  if t == "EnumItem" then
+   return { __t = "KeyCode", name = v.Name }
+  end
+  if t == "boolean" or t == "number" or t == "string" then
+   return v
+  end
+  return nil
+ end
+
+ local function decodeValue(v)
+  if type(v) ~= "table" or type(v.__t) ~= "string" then
+   return v
+  end
+  if v.__t == "Color3" then
+   return Color3.fromRGB(tonumber(v.r) or 255, tonumber(v.g) or 255, tonumber(v.b) or 255)
+  end
+  if v.__t == "KeyCode" then
+   return Enum.KeyCode[tostring(v.name)] or Enum.KeyCode.RightControl
+  end
+  return v
+ end
+
+ local function metaPath()
+  return configRoot .. "/_meta.json"
+ end
+
+ local function configPath(name)
+  return configRoot .. "/" .. sanitizeConfigName(name) .. ".json"
+ end
+
+ local function readJson(path)
+  if type(readfile) ~= "function" or type(isfile) ~= "function" then
+   return nil
+  end
+  local okFile, exists = pcall(isfile, path)
+  if not okFile or not exists then
+   return nil
+  end
+  local ok, raw = pcall(readfile, path)
+  if not ok or type(raw) ~= "string" or raw == "" then
+   return nil
+  end
+  local dOk, data = pcall(function()
+   return HttpService:JSONDecode(raw)
+  end)
+  if dOk and type(data) == "table" then
+   return data
+  end
+  return nil
+ end
+
+ local function writeJson(path, data)
+  if type(writefile) ~= "function" then
+   return false, "writefile unavailable"
+  end
+  ensureFolders(configRoot)
+  local ok, encoded = pcall(function()
+   return HttpService:JSONEncode(data)
+  end)
+  if not ok or type(encoded) ~= "string" then
+   return false, "encode failed"
+  end
+  local wOk, err = pcall(writefile, path, encoded)
+  if not wOk then
+   return false, tostring(err)
+  end
+  return true
+ end
+
+ local function readMeta()
+  local meta = readJson(metaPath()) or {}
+  if type(meta.autoload) ~= "string" then
+   meta.autoload = ""
+  end
+  return meta
+ end
+
+ local function writeMeta(meta)
+  return writeJson(metaPath(), meta or readMeta())
+ end
+
+ function window:GetConfigRoot()
+  return configRoot
+ end
+
+ function window:ListConfigs()
+  local names = {}
+  local seen = {}
+  if type(listfiles) == "function" then
+   local ok, files = pcall(listfiles, configRoot)
+   if ok and type(files) == "table" then
+    for _, path in ipairs(files) do
+     local file = tostring(path):gsub("\\", "/")
+     local base = string.match(file, "([^/]+)$") or file
+     if base ~= "_meta.json" and string.sub(base, -5) == ".json" then
+      local name = sanitizeConfigName(string.sub(base, 1, #base - 5))
+      if not seen[name] then
+       seen[name] = true
+       table.insert(names, name)
+      end
+     end
+    end
+   end
+  end
+  if #names == 0 and type(isfile) == "function" then
+   local ok, exists = pcall(isfile, configPath("default"))
+   if ok and exists then
+    table.insert(names, "default")
+   end
+  end
+  table.sort(names)
+  return names
+ end
+
+ function window:GetAutoload()
+  local meta = readMeta()
+  return tostring(meta.autoload or "")
+ end
+
+ function window:SetAutoload(name)
+  local meta = readMeta()
+  if name == nil or name == false or name == "" then
+   meta.autoload = ""
+  else
+   meta.autoload = sanitizeConfigName(name)
+  end
+  local ok, err = writeMeta(meta)
+  return ok, err
+ end
+
+ local function isInternalFlag(flag)
+  return type(flag) == "string" and string.sub(flag, 1, 10) == "__mythios_"
+ end
+
+ function window:CollectFlags()
+  local out = {}
+  for flag, ctrl in pairs(controls) do
+   if not isInternalFlag(flag) and type(ctrl.Get) == "function" then
+    local ok, value = pcall(function()
+     return ctrl:Get()
+    end)
+    if ok then
+     local encoded = encodeValue(value)
+     if encoded ~= nil then
+      out[flag] = encoded
+      self._flags[flag] = value
+     end
+    end
+   end
+  end
+  return out
+ end
+
+ function window:ApplyFlags(flags, silent)
+  if type(flags) ~= "table" then
+   return
+  end
+  for flag, raw in pairs(flags) do
+   if not isInternalFlag(flag) then
+    local value = decodeValue(raw)
+    local ctrl = controls[flag]
+    if ctrl and type(ctrl.Set) == "function" then
+     pcall(function()
+      ctrl:Set(value, silent == true)
+     end)
+    end
+    self._flags[flag] = value
+   end
+  end
+ end
+
+ function window:SaveConfig(name)
+  name = sanitizeConfigName(name or configUi.selected or "default")
+  configUi.selected = name
+  local payload = {
+   version = 1,
+   placeId = tonumber(placeKey) or game.PlaceId,
+   configId = configId,
+   name = name,
+   savedAt = os.time(),
+   toggleKeys = {},
+   flags = self:CollectFlags(),
+   custom = nil,
+  }
+  for _, key in ipairs(toggleKeys) do
+   table.insert(payload.toggleKeys, key.Name)
+  end
+  if type(opts.OnSaveConfig) == "function" then
+   local ok, custom = pcall(opts.OnSaveConfig, payload)
+   if ok then
+    payload.custom = custom
+   end
+  end
+  local ok, err = writeJson(configPath(name), payload)
+  if ok then
+   pcall(function()
+    self:Notify("Saved config: " .. name)
+   end)
+  else
+   pcall(function()
+    self:Notify(tostring(err or "Save failed"))
+   end)
+  end
+  return ok, err, name
+ end
+
+ function window:LoadConfig(name, silent)
+  name = sanitizeConfigName(name or configUi.selected or "default")
+  configUi.selected = name
+  local data = readJson(configPath(name))
+  if type(data) ~= "table" then
+   if not silent then
+    pcall(function()
+     self:Notify("No config: " .. name)
+    end)
+   end
+   return false, "missing"
+  end
+  if type(data.flags) == "table" then
+   self:ApplyFlags(data.flags, false)
+  end
+  if type(data.toggleKeys) == "table" and #data.toggleKeys > 0 then
+   self:SetToggleKeys(data.toggleKeys)
+  end
+  if type(opts.OnLoadConfig) == "function" then
+   pcall(opts.OnLoadConfig, data.custom, data)
+  end
+  if not silent then
+   pcall(function()
+    self:Notify("Loaded config: " .. name)
+   end)
+  end
+  return true, nil, name
+ end
+
+ function window:DeleteConfig(name)
+  name = sanitizeConfigName(name or configUi.selected or "default")
+  local path = configPath(name)
+  if type(delfile) ~= "function" then
+   return false, "delfile unavailable"
+  end
+  local ok = pcall(delfile, path)
+  local meta = readMeta()
+  if meta.autoload == name then
+   meta.autoload = ""
+   writeMeta(meta)
+  end
+  if ok then
+   pcall(function()
+    self:Notify("Deleted config: " .. name)
+   end)
+  end
+  return ok
+ end
+
+ function window:TryAutoload()
+  local name = self:GetAutoload()
+  if name == nil or name == "" then
+   return false
+  end
+  return self:LoadConfig(name, true)
  end
 
  local function selectTab(name)
@@ -1696,7 +2053,7 @@ function Library.CreateWindow(opts)
  }
 
  function tabApi:Section(title)
- local sec = makeSection(page, title)
+ local sec = makeSection(page, title, window.BindFlag)
  sec.Instance.LayoutOrder = #self._sections + 1
  table.insert(self._sections, sec)
  return sec
@@ -1737,7 +2094,7 @@ function Library.CreateWindow(opts)
  local proxy = {
  _sections = tabApi._sections,
  Section = function(_, title)
- local sec = makeSection(holder, title)
+ local sec = makeSection(holder, title, window.BindFlag)
  table.insert(tabApi._sections, sec)
  return sec
  end,
@@ -1857,7 +2214,7 @@ function Library.CreateWindow(opts)
  end
  end
  if #toggleKeys == 0 then
- addToggleKey(Enum.KeyCode.K)
+ addToggleKey(Enum.KeyCode.RightControl)
  end
  refreshHint()
  if type(window.RebindToggle) == "function" then
@@ -2250,10 +2607,185 @@ function Library.CreateWindow(opts)
  end
  end
 
+ local function refreshConfigDropdown(drop, prefer)
+  if not drop or type(drop.SetOptions) ~= "function" then
+   return
+  end
+  local names = window:ListConfigs()
+  if #names == 0 then
+   names = { "default" }
+  end
+  local keep = prefer or configUi.selected
+  if not table.find(names, keep) then
+   keep = names[1]
+  end
+  configUi.selected = keep
+  drop:SetOptions(names, true)
+  drop:Set(keep, true)
+ end
+
+ local function ensureConfigTab()
+  if opts.BuiltInConfig == false or configUi.built then
+   return
+  end
+  configUi.built = true
+  local tab = window:AddTab("Config")
+  local left, right = tab:Columns()
+  local profiles = left:Section("Profiles")
+  profiles:Label("Per-game folder: " .. configRoot)
+  local nameBox = profiles:TextBox({
+   Text = "Config Name",
+   Default = "default",
+   Placeholder = "e.g. farm, pvp, main",
+   Flag = "__mythios_config_name",
+  })
+  local listDrop
+  listDrop = profiles:Dropdown({
+   Text = "Saved Configs",
+   Options = { "default" },
+   Default = "default",
+   Flag = "__mythios_config_select",
+   Callback = function(v)
+    configUi.selected = sanitizeConfigName(v)
+    if nameBox and nameBox.Set then
+     nameBox:Set(configUi.selected)
+    end
+   end,
+  })
+  profiles:Button({
+   Text = "Refresh List",
+   Callback = function()
+    refreshConfigDropdown(listDrop, configUi.selected)
+   end,
+  })
+  profiles:Button({
+   Text = "Save Config",
+   Callback = function()
+    local name = sanitizeConfigName((nameBox and nameBox.Get and nameBox:Get()) or configUi.selected)
+    window:SaveConfig(name)
+    refreshConfigDropdown(listDrop, name)
+   end,
+  })
+  profiles:Button({
+   Text = "Load Config",
+   Callback = function()
+    local name = sanitizeConfigName((nameBox and nameBox.Get and nameBox:Get()) or configUi.selected)
+    window:LoadConfig(name, false)
+    refreshConfigDropdown(listDrop, name)
+   end,
+  })
+  profiles:Button({
+   Text = "Delete Config",
+   Danger = true,
+   Callback = function()
+    local name = sanitizeConfigName((nameBox and nameBox.Get and nameBox:Get()) or configUi.selected)
+    window:DeleteConfig(name)
+    refreshConfigDropdown(listDrop, "default")
+    if nameBox and nameBox.Set then
+     nameBox:Set(configUi.selected)
+    end
+   end,
+  })
+
+  local boot = right:Section("Autoload / Menu")
+  local autoDrop
+  autoDrop = boot:Dropdown({
+   Text = "Autoload Config",
+   Options = { "(none)", "default" },
+   Default = "(none)",
+   Flag = "__mythios_autoload",
+   Callback = function(v)
+    if v == "(none)" then
+     window:SetAutoload("")
+    else
+     window:SetAutoload(v)
+    end
+   end,
+  })
+  boot:Button({
+   Text = "Use Selected As Autoload",
+   Callback = function()
+    local name = sanitizeConfigName((nameBox and nameBox.Get and nameBox:Get()) or configUi.selected)
+    window:SetAutoload(name)
+    local names = window:ListConfigs()
+    local optsList = { "(none)" }
+    for _, n in ipairs(names) do
+     table.insert(optsList, n)
+    end
+    if not table.find(optsList, name) then
+     table.insert(optsList, name)
+    end
+    autoDrop:SetOptions(optsList, true)
+    autoDrop:Set(name, true)
+    window:Notify("Autoload → " .. name)
+   end,
+  })
+  boot:Button({
+   Text = "Clear Autoload",
+   Callback = function()
+    window:SetAutoload("")
+    autoDrop:Set("(none)", true)
+    window:Notify("Autoload cleared")
+   end,
+  })
+  local defaultKey = toggleKeys[1] or Enum.KeyCode.RightControl
+  boot:Keybind({
+   Text = "Toggle Hub Key",
+   Default = defaultKey,
+   Flag = "__mythios_toggle_key",
+   Callback = function(key)
+    window:SetToggleKeys({ key })
+   end,
+  })
+  boot:Label("Default key: RightControl")
+  boot:Label("Configs stay separate per PlaceId + UI id.")
+
+  local function syncAutoloadDrop()
+   local names = window:ListConfigs()
+   local optsList = { "(none)" }
+   for _, n in ipairs(names) do
+    table.insert(optsList, n)
+   end
+   local current = window:GetAutoload()
+   if current ~= "" and not table.find(optsList, current) then
+    table.insert(optsList, current)
+   end
+   autoDrop:SetOptions(optsList, true)
+   autoDrop:Set(current ~= "" and current or "(none)", true)
+  end
+
+  refreshConfigDropdown(listDrop, configUi.selected)
+  syncAutoloadDrop()
+  configUi.refresh = function()
+   refreshConfigDropdown(listDrop, configUi.selected)
+   syncAutoloadDrop()
+  end
+ end
+
+ function window:EnsureConfigTab()
+  ensureConfigTab()
+ end
+
  if showBoot then
- task.spawn(playBootThenOpen)
+  task.spawn(playBootThenOpen)
  elseif opts.StartOpen ~= false then
- window:SetOpen(true)
+  window:SetOpen(true)
+ end
+
+ if opts.BuiltInConfig ~= false then
+  task.spawn(function()
+   task.wait(0.2)
+   if not window._alive then
+    return
+   end
+   ensureConfigTab()
+   if opts.Autoload ~= false then
+    window:TryAutoload()
+   end
+   if configUi.refresh then
+    configUi.refresh()
+   end
+  end)
  end
 
  table.insert(Library.Windows, window)
